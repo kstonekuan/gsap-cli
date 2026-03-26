@@ -1,0 +1,13 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+
+# Rust
+cli/target/
+
+# Node
+daemon/node_modules/
+daemon/dist/
+daemon/pnpm-workspace.yaml
+daemon/.turbo/
