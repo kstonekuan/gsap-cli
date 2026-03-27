@@ -6,8 +6,10 @@
 # Rust
 cli/target/
 
-# Node
+# Bun / Node
 daemon/node_modules/
 daemon/dist/
-daemon/pnpm-workspace.yaml
-daemon/.turbo/
+*.tsbuildinfo
+
+# Rust build cache
+cli/target/.rustc_info.json

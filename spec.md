@@ -15,7 +15,7 @@ Agent (Claude Code)
 CLI binary (gsap-cli, Rust)
   |  Unix domain socket IPC (/tmp/gsap-cli.sock)
   v
-Daemon (gsap-daemon, foreground Node.js process)
+Daemon (gsap-daemon, foreground Bun process)
   |  manages scene graph + forwards commands
   v
 Renderer (terminal or browser)
@@ -25,7 +25,7 @@ The daemon runs in the **foreground** in a separate terminal. The user starts it
 
 **Key insight**: In browser mode, GSAP runs *in the browser* (not Node.js). The daemon relays commands over WebSocket to a browser client that executes `gsap.to()` etc. natively. This gives full animation fidelity without pushing 60fps position data over the wire.
 
-In terminal mode, GSAP runs in Node.js animating plain objects, and a terminal renderer rasterizes their properties to the TTY at ~30fps.
+In terminal mode, GSAP runs in Bun animating plain objects, and a terminal renderer rasterizes their properties to the TTY at ~30fps via raw ANSI escape sequences.
 
 ## Tech Stack
 
@@ -35,12 +35,12 @@ In terminal mode, GSAP runs in Node.js animating plain objects, and a terminal r
 - `std::os::unix::net::UnixStream` for IPC (no extra deps)
 - Single static binary, ~1ms startup (vs ~50-100ms for Node.js)
 
-**Daemon (TypeScript)**:
-- pnpm, tsup (esbuild bundler)
+**Daemon (TypeScript/Bun)**:
+- Bun runtime + bundler
 - `zod` for command validation
 - Node `net` module for Unix domain socket listener
-- `terminal-kit` for terminal rendering
-- `fastify` + `ws` for browser mode HTTP/WebSocket server
+- Raw ANSI escape sequences for terminal rendering
+- `Bun.serve()` for browser mode HTTP/WebSocket server
 - `gsap` npm package
 - `playwright` (optional) for screenshots
 
@@ -102,10 +102,10 @@ gsap-cli/
       ipc.rs                         # Unix socket client
       protocol.rs                    # Command/response types (mirrors daemon)
 
-  daemon/                            # TypeScript daemon
+  daemon/                            # TypeScript daemon (Bun)
     package.json
     tsconfig.json
-    tsup.config.ts
+    build.ts                         # Bun build script
     src/
       index.ts                       # Daemon entry point
       server.ts                      # Socket listener, lifecycle
@@ -116,7 +116,7 @@ gsap-cli/
       screenshot.ts                  # Playwright capture
       renderers/
         types.ts                     # Renderer interface
-        terminal.ts                  # terminal-kit renderer
+        terminal.ts                  # ANSI escape sequence renderer
         browser.ts                   # fastify + ws server
         browser/
           index.html, client.ts, styles.css  # Browser-side GSAP client
@@ -129,14 +129,14 @@ gsap-cli/
 
 ### Phase 1: Foundation
 - Rust CLI: `Cargo.toml`, clap subcommands, serde protocol types, Unix socket IPC client
-- Daemon: `package.json`, `tsconfig.json`, `tsup.config.ts`, biome config
+- Daemon: `package.json`, `tsconfig.json`, `build.ts`, biome config
 - Shared protocol: JSON command/response format defined in both Rust (serde) and TS (zod)
 - Daemon runs in foreground, listens on Unix socket
 - CLI `status` command to check daemon connectivity
 - Scene graph with element CRUD (`element add/remove/set`)
 
 ### Phase 2: Terminal Renderer
-- `terminal-kit` based renderer mapping scene state to terminal cells
+- ANSI escape sequence renderer mapping scene state to terminal cells
 - Wire GSAP ticker in daemon to push scene state to renderer
 - `animate to/from/fromTo` commands creating GSAP tweens on scene objects
 - Animation manager for tracking active tweens
@@ -178,5 +178,5 @@ gsap-cli screenshot --output /tmp/frame.png
 3. `gsap-cli pipe` accepts JSON commands on STDIN and returns responses
 4. `gsap-cli screenshot` captures current browser frame
 5. `cargo clippy --all-targets --all-features` and `cargo fmt` pass for CLI
-6. `pnpm check` (biome) passes for daemon with no errors
+6. `bun run check` (biome) passes for daemon with no errors
 7. End-to-end: script that starts daemon, creates scene, animates, screenshots, stops daemon

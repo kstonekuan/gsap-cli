@@ -58,7 +58,7 @@ const timelineCreateCommandSchema = z.object({
 const timelineAddCommandSchema = z.object({
 	cmd: z.literal("timeline.add"),
 	name: z.string(),
-	tween_type: z.string(),
+	tween_type: z.enum(["to", "from", "fromTo"]),
 	target: z.string(),
 	props: propsSchema,
 	position: z.string().optional(),

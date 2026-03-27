@@ -1,4 +1,5 @@
 import gsap from "gsap";
+import type { TweenType } from "./protocol/types.js";
 import type { Scene } from "./scene.js";
 
 let tweenCounter = 0;
@@ -26,7 +27,7 @@ export class AnimationManager {
 
 		const id = `tween_${++tweenCounter}`;
 		const tween = gsap.to(element.props, {
-			...props,
+			...structuredClone(props),
 			duration: duration ?? 1,
 			ease: ease ?? "power2.out",
 			onComplete: () => {
@@ -50,7 +51,7 @@ export class AnimationManager {
 
 		const id = `tween_${++tweenCounter}`;
 		const tween = gsap.from(element.props, {
-			...props,
+			...structuredClone(props),
 			duration: duration ?? 1,
 			ease: ease ?? "power2.out",
 			onComplete: () => {
@@ -74,8 +75,8 @@ export class AnimationManager {
 		}
 
 		const id = `tween_${++tweenCounter}`;
-		const tween = gsap.fromTo(element.props, fromProps, {
-			...toProps,
+		const tween = gsap.fromTo(element.props, structuredClone(fromProps), {
+			...structuredClone(toProps),
 			duration: duration ?? 1,
 			ease: ease ?? "power2.out",
 			onComplete: () => {
@@ -101,7 +102,7 @@ export class AnimationManager {
 
 	addToTimeline(
 		name: string,
-		tweenType: string,
+		tweenType: TweenType,
 		target: string,
 		props: Record<string, unknown>,
 		position?: string,
@@ -118,19 +119,20 @@ export class AnimationManager {
 		const id = `tween_${++tweenCounter}`;
 		const positionParam = position ?? "+=0";
 
+		const clonedProps = structuredClone(props);
+
 		switch (tweenType) {
 			case "to":
-				timeline.to(element.props, props, positionParam);
+				timeline.to(element.props, clonedProps, positionParam);
 				break;
 			case "from":
-				timeline.from(element.props, props, positionParam);
+				timeline.from(element.props, clonedProps, positionParam);
 				break;
 			case "fromTo":
+				// fromTo requires separate from/to props which the timeline.add command doesn't support yet
 				throw new Error(
 					"fromTo in timelines is not yet supported via this command",
 				);
-			default:
-				throw new Error(`Unknown tween type: ${tweenType}`);
 		}
 
 		return id;

@@ -19,9 +19,20 @@ export function startSocketServer(context: CommandContext): Server {
 
 		socket.on("data", (data) => {
 			buffer += data.toString();
-			processBuffer(socket, buffer, context).then((remaining) => {
-				buffer = remaining;
-			});
+			processBuffer(socket, buffer, context)
+				.then((remaining) => {
+					buffer = remaining;
+				})
+				.catch((error) => {
+					console.error("[server] Unexpected error:", error);
+					try {
+						socket.write(
+							`${JSON.stringify({ ok: false, error: "Internal server error" })}\n`,
+						);
+					} catch {
+						// Socket may already be closed
+					}
+				});
 		});
 
 		socket.on("error", (error) => {

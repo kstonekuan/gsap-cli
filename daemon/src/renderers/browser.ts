@@ -1,19 +1,28 @@
-import { exec } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import fastify from "fastify";
-import { type WebSocket, WebSocketServer } from "ws";
+import type { Server, ServerWebSocket } from "bun";
 import type { Scene } from "../scene.js";
 import type { Renderer } from "./types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+const MIME_TYPES: Record<string, string> = {
+	"/": "text/html",
+	"/client.js": "application/javascript",
+	"/styles.css": "text/css",
+};
+
+const FILE_NAMES: Record<string, string> = {
+	"/": "index.html",
+	"/client.js": "client.js",
+	"/styles.css": "styles.css",
+};
+
 export class BrowserRenderer implements Renderer {
 	private port: number;
-	private app = fastify();
-	private webSocketServer: WebSocketServer | null = null;
-	private clients = new Set<WebSocket>();
+	private server: Server<undefined> | null = null;
+	private clients = new Set<ServerWebSocket<undefined>>();
 	private pendingCommands: unknown[] = [];
 
 	constructor(port = 3000) {
@@ -22,54 +31,60 @@ export class BrowserRenderer implements Renderer {
 
 	async start(): Promise<void> {
 		const browserDir = join(__dirname, "browser");
+		const renderer = this;
 
-		this.app.get("/", (_request, reply) => {
-			reply
-				.type("text/html")
-				.send(readFileSync(join(browserDir, "index.html"), "utf-8"));
-		});
+		this.server = Bun.serve({
+			port: this.port,
+			hostname: "0.0.0.0",
 
-		this.app.get("/client.js", (_request, reply) => {
-			reply
-				.type("application/javascript")
-				.send(readFileSync(join(browserDir, "client.js"), "utf-8"));
-		});
+			fetch(request, server) {
+				const url = new URL(request.url);
 
-		this.app.get("/styles.css", (_request, reply) => {
-			reply
-				.type("text/css")
-				.send(readFileSync(join(browserDir, "styles.css"), "utf-8"));
-		});
+				// Upgrade WebSocket requests
+				if (server.upgrade(request)) {
+					return undefined;
+				}
 
-		// Get the underlying Node http server after listen
-		await this.app.listen({ port: this.port, host: "0.0.0.0" });
+				const mimeType = MIME_TYPES[url.pathname];
+				const fileName = FILE_NAMES[url.pathname];
 
-		const httpServer = this.app.server;
-		this.webSocketServer = new WebSocketServer({ server: httpServer });
+				if (mimeType && fileName) {
+					const content = readFileSync(join(browserDir, fileName), "utf-8");
+					return new Response(content, {
+						headers: { "Content-Type": mimeType },
+					});
+				}
 
-		this.webSocketServer.on("connection", (ws) => {
-			this.clients.add(ws);
-			console.log(
-				`[browser renderer] Client connected (total: ${this.clients.size})`,
-			);
+				return new Response("Not Found", { status: 404 });
+			},
 
-			// Send any pending commands to new client
-			for (const cmd of this.pendingCommands) {
-				ws.send(JSON.stringify(cmd));
-			}
+			websocket: {
+				open(ws) {
+					renderer.clients.add(ws);
+					console.log(
+						`[browser renderer] Client connected (total: ${renderer.clients.size})`,
+					);
 
-			ws.on("close", () => {
-				this.clients.delete(ws);
-				console.log(
-					`[browser renderer] Client disconnected (total: ${this.clients.size})`,
-				);
-			});
+					// Send any pending commands to new client
+					for (const cmd of renderer.pendingCommands) {
+						ws.send(JSON.stringify(cmd));
+					}
+				},
+				close(ws) {
+					renderer.clients.delete(ws);
+					console.log(
+						`[browser renderer] Client disconnected (total: ${renderer.clients.size})`,
+					);
+				},
+				message() {
+					// Browser clients don't send messages we need to handle
+				},
+			},
 		});
 
 		const url = `http://localhost:${this.port}`;
 		console.log(`[browser renderer] Serving at ${url}`);
 
-		// Auto-open browser
 		openBrowser(url);
 	}
 
@@ -78,13 +93,13 @@ export class BrowserRenderer implements Renderer {
 			client.close();
 		}
 		this.clients.clear();
-		await this.app.close();
+		this.server?.stop();
 	}
 
 	onSceneChange(scene: Scene): void {
 		const syncCommand = {
 			type: "scene.sync",
-			elements: scene.getAll(),
+			elements: scene.getAllSerializable(),
 		};
 		this.broadcast(syncCommand);
 	}
@@ -92,7 +107,7 @@ export class BrowserRenderer implements Renderer {
 	onTick(scene: Scene): void {
 		const tickCommand = {
 			type: "scene.tick",
-			elements: scene.getAll(),
+			elements: scene.getAllSerializable(),
 		};
 		this.broadcast(tickCommand);
 	}
@@ -110,10 +125,7 @@ export class BrowserRenderer implements Renderer {
 	private broadcast(data: unknown): void {
 		const message = JSON.stringify(data);
 		for (const client of this.clients) {
-			if (client.readyState === 1) {
-				// WebSocket.OPEN
-				client.send(message);
-			}
+			client.send(message);
 		}
 	}
 }
@@ -127,11 +139,15 @@ function openBrowser(url: string): void {
 				? "start"
 				: "xdg-open";
 
-	exec(`${command} ${url}`, (error) => {
-		if (error) {
-			console.log(
-				`[browser renderer] Could not auto-open browser. Visit ${url} manually.`,
-			);
-		}
+	Bun.spawn([command, url], {
+		stderr: "ignore",
+		stdout: "ignore",
+		onExit(_proc, exitCode) {
+			if (exitCode !== 0) {
+				console.log(
+					`[browser renderer] Could not auto-open browser. Visit ${url} manually.`,
+				);
+			}
+		},
 	});
 }

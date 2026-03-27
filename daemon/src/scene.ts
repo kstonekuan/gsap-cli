@@ -4,6 +4,35 @@ export interface SceneElement {
 	props: Record<string, unknown>;
 }
 
+export interface SerializableSceneElement {
+	id: string;
+	type: "rect" | "circle" | "text";
+	props: Record<string, unknown>;
+}
+
+/** Strip GSAP internal keys (prefixed with _) from props so the element is JSON-serializable */
+function toSerializableElement(
+	element: SceneElement,
+): SerializableSceneElement {
+	const cleanProps: Record<string, unknown> = {};
+	for (const [key, value] of Object.entries(element.props)) {
+		if (!key.startsWith("_") && typeof value !== "object") {
+			cleanProps[key] = value;
+		} else if (!key.startsWith("_") && value === null) {
+			cleanProps[key] = value;
+		} else if (!key.startsWith("_")) {
+			// Skip complex objects that GSAP may have injected
+			try {
+				JSON.stringify(value);
+				cleanProps[key] = value;
+			} catch {
+				// Non-serializable — skip
+			}
+		}
+	}
+	return { id: element.id, type: element.type, props: cleanProps };
+}
+
 export class Scene {
 	private elements = new Map<string, SceneElement>();
 
@@ -51,6 +80,11 @@ export class Scene {
 
 	getAll(): SceneElement[] {
 		return [...this.elements.values()];
+	}
+
+	/** Returns all elements with GSAP internals stripped — safe for JSON.stringify */
+	getAllSerializable(): SerializableSceneElement[] {
+		return [...this.elements.values()].map(toSerializableElement);
 	}
 
 	size(): number {

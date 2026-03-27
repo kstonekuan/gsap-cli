@@ -5,9 +5,9 @@
 ### TypeScript
 
 ```bash
-pnpm lint       # Biome linting with auto-fix
-pnpm typecheck  # TypeScript type checking
-pnpm check      # Run all checks
+bun run lint       # Biome linting with auto-fix
+bun run typecheck  # TypeScript type checking
+bun run check      # Run all checks
 ```
 
 ### Rust

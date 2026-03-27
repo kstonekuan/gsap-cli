@@ -1,12 +1,24 @@
 import { parseArgs } from "node:util";
 import { AnimationManager } from "./animation-manager.js";
 import type { CommandContext } from "./commands.js";
+import type { DaemonMode } from "./protocol/types.js";
 import { BrowserRenderer } from "./renderers/browser.js";
 import { TerminalRenderer } from "./renderers/terminal.js";
 import type { Renderer } from "./renderers/types.js";
 import { Scene } from "./scene.js";
 import { startSocketServer } from "./server.js";
 import { startTicker } from "./ticker.js";
+
+const VALID_MODES: readonly DaemonMode[] = ["browser", "terminal"] as const;
+
+function parseDaemonMode(raw: string | undefined): DaemonMode {
+	const value = raw ?? "browser";
+	if (VALID_MODES.includes(value as DaemonMode)) {
+		return value as DaemonMode;
+	}
+	console.error(`Unknown mode: "${value}". Use "terminal" or "browser".`);
+	process.exit(1);
+}
 
 const { values } = parseArgs({
 	options: {
@@ -21,7 +33,7 @@ const { values } = parseArgs({
 	},
 });
 
-const mode = values.mode ?? "browser";
+const mode: DaemonMode = parseDaemonMode(values.mode);
 const port = Number.parseInt(values.port ?? "3000", 10);
 
 async function main() {
@@ -39,9 +51,6 @@ async function main() {
 		case "browser":
 			renderer = new BrowserRenderer(port);
 			break;
-		default:
-			console.error(`Unknown mode: ${mode}. Use "terminal" or "browser".`);
-			process.exit(1);
 	}
 
 	await renderer.start();

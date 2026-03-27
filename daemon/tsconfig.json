@@ -1,12 +1,13 @@
 {
 	"compilerOptions": {
-		"target": "ES2022",
+		"target": "ESNext",
 		"module": "ESNext",
 		"moduleResolution": "bundler",
 		"resolveJsonModule": true,
 		"isolatedModules": true,
 		"esModuleInterop": true,
 		"allowSyntheticDefaultImports": true,
+		"types": ["bun-types"],
 		"noEmit": true,
 		"strict": true,
 		"noImplicitReturns": true,

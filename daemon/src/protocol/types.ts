@@ -1,3 +1,5 @@
+export type DaemonMode = "browser" | "terminal";
+
 export interface SuccessResponse {
 	ok: true;
 	id?: string;
@@ -88,10 +90,12 @@ export interface TimelineCreateCommand extends BaseCommand {
 	defaults?: Record<string, unknown>;
 }
 
+export type TweenType = "to" | "from" | "fromTo";
+
 export interface TimelineAddCommand extends BaseCommand {
 	cmd: "timeline.add";
 	name: string;
-	tween_type: string;
+	tween_type: TweenType;
 	target: string;
 	props: Record<string, unknown>;
 	position?: string;

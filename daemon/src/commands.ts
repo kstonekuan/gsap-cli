@@ -1,6 +1,6 @@
 import type { AnimationManager } from "./animation-manager.js";
-import { commandSchema } from "./protocol/schema.js";
-import type { Command, Response } from "./protocol/types.js";
+import { commandSchema, type ValidatedCommand } from "./protocol/schema.js";
+import type { DaemonMode, Response } from "./protocol/types.js";
 import type { Renderer } from "./renderers/types.js";
 import type { Scene } from "./scene.js";
 import { captureScreenshot } from "./screenshot.js";
@@ -9,7 +9,7 @@ export interface CommandContext {
 	scene: Scene;
 	animationManager: AnimationManager;
 	renderer: Renderer;
-	mode: string;
+	mode: DaemonMode;
 	port: number;
 	startTime: number;
 }
@@ -26,7 +26,7 @@ export async function handleCommand(
 		};
 	}
 
-	const command = parseResult.data as Command;
+	const command: ValidatedCommand = parseResult.data;
 
 	try {
 		switch (command.cmd) {
