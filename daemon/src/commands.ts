@@ -1,6 +1,10 @@
 import type { AnimationManager } from "./animation-manager.js";
 import { commandSchema, type ValidatedCommand } from "./protocol/schema.js";
-import type { DaemonMode, Response } from "./protocol/types.js";
+import type {
+	AnimationControlFields,
+	DaemonMode,
+	Response,
+} from "./protocol/types.js";
 import type { Renderer } from "./renderers/types.js";
 import type { Scene } from "./scene.js";
 import { captureScreenshot } from "./screenshot.js";
@@ -12,6 +16,20 @@ export interface CommandContext {
 	mode: DaemonMode;
 	port: number;
 	startTime: number;
+}
+
+function extractAnimationControls(
+	command: AnimationControlFields,
+): AnimationControlFields {
+	return {
+		duration: command.duration,
+		ease: command.ease,
+		stagger: command.stagger,
+		repeat: command.repeat,
+		yoyo: command.yoyo,
+		delay: command.delay,
+		repeatDelay: command.repeatDelay,
+	};
 }
 
 export async function handleCommand(
@@ -41,7 +59,12 @@ export async function handleCommand(
 				};
 
 			case "element.add": {
-				context.scene.add(command.id, command.type, command.props);
+				context.scene.add(
+					command.id,
+					command.type,
+					command.props,
+					command.parent,
+				);
 				context.renderer.onSceneChange(context.scene);
 				context.renderer.forwardCommand?.(command);
 				return { ok: true, id: command.id };
@@ -65,10 +88,12 @@ export async function handleCommand(
 				const id = context.animationManager.animateTo(
 					command.target,
 					command.props,
-					command.duration,
-					command.ease,
+					extractAnimationControls(command),
 				);
 				context.renderer.forwardCommand?.(command);
+				if (command.wait) {
+					await context.animationManager.waitForTween(id);
+				}
 				return { ok: true, id };
 			}
 
@@ -76,10 +101,12 @@ export async function handleCommand(
 				const id = context.animationManager.animateFrom(
 					command.target,
 					command.props,
-					command.duration,
-					command.ease,
+					extractAnimationControls(command),
 				);
 				context.renderer.forwardCommand?.(command);
+				if (command.wait) {
+					await context.animationManager.waitForTween(id);
+				}
 				return { ok: true, id };
 			}
 
@@ -88,10 +115,45 @@ export async function handleCommand(
 					command.target,
 					command.from_props,
 					command.to_props,
-					command.duration,
-					command.ease,
+					extractAnimationControls(command),
 				);
 				context.renderer.forwardCommand?.(command);
+				if (command.wait) {
+					await context.animationManager.waitForTween(id);
+				}
+				return { ok: true, id };
+			}
+
+			case "animate.status": {
+				const status = context.animationManager.getTweenStatus(command.id);
+				return {
+					ok: true,
+					active: status.active,
+					progress: status.progress,
+				};
+			}
+
+			case "animate.motionPath": {
+				const motionPathConfig: Record<string, unknown> = {
+					path: command.path,
+				};
+				if (command.autoRotate !== undefined)
+					motionPathConfig["autoRotate"] = command.autoRotate;
+				if (command.alignOrigin !== undefined)
+					motionPathConfig["alignOrigin"] = command.alignOrigin;
+				if (command.start !== undefined)
+					motionPathConfig["start"] = command.start;
+				if (command.end !== undefined) motionPathConfig["end"] = command.end;
+
+				const id = context.animationManager.animateTo(
+					command.target,
+					{ motionPath: motionPathConfig },
+					extractAnimationControls(command),
+				);
+				context.renderer.forwardCommand?.(command);
+				if (command.wait) {
+					await context.animationManager.waitForTween(id);
+				}
 				return { ok: true, id };
 			}
 
@@ -110,6 +172,7 @@ export async function handleCommand(
 					command.tween_type,
 					command.target,
 					command.props,
+					command.from_props,
 					command.position,
 				);
 				context.renderer.forwardCommand?.(command);
@@ -119,6 +182,9 @@ export async function handleCommand(
 			case "timeline.play": {
 				context.animationManager.playTimeline(command.name);
 				context.renderer.forwardCommand?.(command);
+				if (command.wait) {
+					await context.animationManager.waitForTimeline(command.name);
+				}
 				return { ok: true };
 			}
 
@@ -136,6 +202,54 @@ export async function handleCommand(
 
 			case "timeline.seek": {
 				context.animationManager.seekTimeline(command.name, command.position);
+				context.renderer.forwardCommand?.(command);
+				return { ok: true };
+			}
+
+			case "timeline.label": {
+				context.animationManager.addTimelineLabel(
+					command.name,
+					command.label,
+					command.position,
+				);
+				context.renderer.forwardCommand?.(command);
+				return { ok: true };
+			}
+
+			case "text.typewriter": {
+				const result = context.animationManager.typewriter(
+					command.target,
+					command.text,
+					command.duration,
+					command.ease,
+				);
+				context.renderer.forwardCommand?.(command);
+				if (command.wait) {
+					await result.completionPromise;
+				}
+				return { ok: true, id: result.id };
+			}
+
+			case "text.scramble": {
+				const result = context.animationManager.scramble(
+					command.target,
+					command.text,
+					command.duration,
+					command.chars,
+				);
+				context.renderer.forwardCommand?.(command);
+				if (command.wait) {
+					await result.completionPromise;
+				}
+				return { ok: true, id: result.id };
+			}
+
+			case "camera.set": {
+				context.renderer.forwardCommand?.(command);
+				return { ok: true };
+			}
+
+			case "camera.animate": {
 				context.renderer.forwardCommand?.(command);
 				return { ok: true };
 			}

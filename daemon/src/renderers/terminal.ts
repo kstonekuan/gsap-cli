@@ -91,6 +91,7 @@ export class TerminalRenderer implements Renderer {
 
 			switch (element.type) {
 				case "rect":
+				case "group":
 					frame += this.renderRect(x, y, element.props, fill);
 					break;
 				case "circle":
@@ -99,6 +100,31 @@ export class TerminalRenderer implements Renderer {
 				case "text":
 					frame += this.renderText(x, y, element.props, fill);
 					break;
+				case "image":
+					frame += this.renderText(x, y, { text: `[img:${element.id}]` }, fill);
+					break;
+				case "html":
+					frame += this.renderText(
+						x,
+						y,
+						{ text: `[html:${element.id}]` },
+						fill,
+					);
+					break;
+				case "path":
+					frame += this.renderText(
+						x,
+						y,
+						{ text: `[path:${element.id}]` },
+						fill,
+					);
+					break;
+				case "line": {
+					const rawStroke = element.props["stroke"];
+					const stroke = typeof rawStroke === "string" ? rawStroke : undefined;
+					frame += this.renderLine(element.props, stroke);
+					break;
+				}
 			}
 		}
 
@@ -160,6 +186,42 @@ export class TerminalRenderer implements Renderer {
 
 					output += ANSI.moveTo(drawX, drawY) + char;
 				}
+			}
+		}
+
+		return output;
+	}
+
+	private renderLine(props: Record<string, unknown>, stroke?: string): string {
+		const x1 = Math.round(Number(props["x1"]) || 0);
+		const y1 = Math.round(Number(props["y1"]) || 0);
+		const x2 = Math.round(Number(props["x2"]) || 0);
+		const y2 = Math.round(Number(props["y2"]) || 0);
+		const color = colorSequence(stroke);
+		let output = color;
+
+		// Bresenham's line algorithm
+		const dx = Math.abs(x2 - x1);
+		const dy = Math.abs(y2 - y1);
+		const sx = x1 < x2 ? 1 : -1;
+		const sy = y1 < y2 ? 1 : -1;
+		let err = dx - dy;
+		let cx = x1;
+		let cy = y1;
+
+		while (true) {
+			if (cx >= 0 && cx < this.width && cy >= 0 && cy < this.height) {
+				output += ANSI.moveTo(cx, cy) + "─";
+			}
+			if (cx === x2 && cy === y2) break;
+			const e2 = 2 * err;
+			if (e2 > -dy) {
+				err -= dy;
+				cx += sx;
+			}
+			if (e2 < dx) {
+				err += dx;
+				cy += sy;
 			}
 		}
 

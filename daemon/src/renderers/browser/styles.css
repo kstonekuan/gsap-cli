@@ -36,6 +36,36 @@ body {
 	white-space: nowrap;
 }
 
+.element-image {
+	object-fit: contain;
+}
+
+.element-html {
+	overflow: hidden;
+}
+
+.element-group {
+	position: absolute;
+}
+
+.element-line {
+	/* SVG lines are styled via attributes */
+}
+
+.element-path {
+	/* SVG paths are styled via attributes */
+}
+
+.typewriter-cursor {
+	animation: blink 0.7s step-end infinite;
+}
+
+@keyframes blink {
+	50% {
+		opacity: 0;
+	}
+}
+
 #status {
 	position: fixed;
 	top: 8px;

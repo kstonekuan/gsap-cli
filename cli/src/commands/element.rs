@@ -3,7 +3,7 @@ use serde_json::Value;
 use crate::ipc::send_command;
 use crate::protocol::Command;
 
-pub fn add(id: String, element_type: String, props: Option<String>) {
+pub fn add(id: String, element_type: String, parent: Option<String>, props: Option<String>) {
     let props: Option<Value> = props.map(|p| {
         serde_json::from_str(&p).unwrap_or_else(|e| {
             eprintln!("Invalid JSON for --props: {e}");
@@ -14,6 +14,7 @@ pub fn add(id: String, element_type: String, props: Option<String>) {
     let command = Command::ElementAdd {
         id,
         element_type,
+        parent,
         props,
     };
     send_and_print(&command);

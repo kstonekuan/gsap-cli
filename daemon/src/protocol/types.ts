@@ -8,6 +8,8 @@ export interface SuccessResponse {
 	tweens?: number;
 	timelines?: number;
 	uptime?: number;
+	active?: boolean;
+	progress?: number;
 }
 
 export interface ErrorResponse {
@@ -25,12 +27,19 @@ export type CommandType =
 	| "animate.to"
 	| "animate.from"
 	| "animate.fromTo"
+	| "animate.status"
+	| "animate.motionPath"
 	| "timeline.create"
 	| "timeline.add"
 	| "timeline.play"
 	| "timeline.pause"
 	| "timeline.reverse"
 	| "timeline.seek"
+	| "timeline.label"
+	| "text.typewriter"
+	| "text.scramble"
+	| "camera.set"
+	| "camera.animate"
 	| "screenshot";
 
 export interface BaseCommand {
@@ -41,10 +50,21 @@ export interface StatusCommand extends BaseCommand {
 	cmd: "status";
 }
 
+export type ElementType =
+	| "rect"
+	| "circle"
+	| "text"
+	| "image"
+	| "html"
+	| "line"
+	| "group"
+	| "path";
+
 export interface ElementAddCommand extends BaseCommand {
 	cmd: "element.add";
 	id: string;
-	type: "rect" | "circle" | "text";
+	type: ElementType;
+	parent?: string;
 	props?: Record<string, unknown>;
 }
 
@@ -59,29 +79,55 @@ export interface ElementSetCommand extends BaseCommand {
 	props: Record<string, unknown>;
 }
 
-export interface AnimateToCommand extends BaseCommand {
+export interface AnimationControlFields {
+	duration?: number;
+	ease?: string;
+	stagger?: number;
+	repeat?: number;
+	yoyo?: boolean;
+	delay?: number;
+	repeatDelay?: number;
+	wait?: boolean;
+}
+
+export interface AnimateToCommand extends BaseCommand, AnimationControlFields {
 	cmd: "animate.to";
 	target: string;
 	props: Record<string, unknown>;
-	duration?: number;
-	ease?: string;
 }
 
-export interface AnimateFromCommand extends BaseCommand {
+export interface AnimateFromCommand
+	extends BaseCommand,
+		AnimationControlFields {
 	cmd: "animate.from";
 	target: string;
 	props: Record<string, unknown>;
-	duration?: number;
-	ease?: string;
 }
 
-export interface AnimateFromToCommand extends BaseCommand {
+export interface AnimateFromToCommand
+	extends BaseCommand,
+		AnimationControlFields {
 	cmd: "animate.fromTo";
 	target: string;
 	from_props: Record<string, unknown>;
 	to_props: Record<string, unknown>;
-	duration?: number;
-	ease?: string;
+}
+
+export interface AnimateStatusCommand extends BaseCommand {
+	cmd: "animate.status";
+	id: string;
+}
+
+export interface AnimateMotionPathCommand
+	extends BaseCommand,
+		AnimationControlFields {
+	cmd: "animate.motionPath";
+	target: string;
+	path: string;
+	autoRotate?: boolean;
+	alignOrigin?: number[];
+	start?: number;
+	end?: number;
 }
 
 export interface TimelineCreateCommand extends BaseCommand {
@@ -98,12 +144,14 @@ export interface TimelineAddCommand extends BaseCommand {
 	tween_type: TweenType;
 	target: string;
 	props: Record<string, unknown>;
+	from_props?: Record<string, unknown>;
 	position?: string;
 }
 
 export interface TimelinePlayCommand extends BaseCommand {
 	cmd: "timeline.play";
 	name: string;
+	wait?: boolean;
 }
 
 export interface TimelinePauseCommand extends BaseCommand {
@@ -122,6 +170,51 @@ export interface TimelineSeekCommand extends BaseCommand {
 	position: string;
 }
 
+export interface TimelineLabelCommand extends BaseCommand {
+	cmd: "timeline.label";
+	name: string;
+	label: string;
+	position?: string;
+}
+
+export interface TextTypewriterCommand extends BaseCommand {
+	cmd: "text.typewriter";
+	target: string;
+	text: string;
+	duration?: number;
+	ease?: string;
+	cursor?: boolean;
+	wait?: boolean;
+}
+
+export interface TextScrambleCommand extends BaseCommand {
+	cmd: "text.scramble";
+	target: string;
+	text: string;
+	duration?: number;
+	chars?: string;
+	wait?: boolean;
+}
+
+export interface CameraSetCommand extends BaseCommand {
+	cmd: "camera.set";
+	x?: number;
+	y?: number;
+	zoom?: number;
+	rotation?: number;
+}
+
+export interface CameraAnimateCommand extends BaseCommand {
+	cmd: "camera.animate";
+	x?: number;
+	y?: number;
+	zoom?: number;
+	rotation?: number;
+	duration?: number;
+	ease?: string;
+	wait?: boolean;
+}
+
 export interface ScreenshotCommand extends BaseCommand {
 	cmd: "screenshot";
 	output: string;
@@ -135,10 +228,17 @@ export type Command =
 	| AnimateToCommand
 	| AnimateFromCommand
 	| AnimateFromToCommand
+	| AnimateStatusCommand
+	| AnimateMotionPathCommand
 	| TimelineCreateCommand
 	| TimelineAddCommand
 	| TimelinePlayCommand
 	| TimelinePauseCommand
 	| TimelineReverseCommand
 	| TimelineSeekCommand
+	| TimelineLabelCommand
+	| TextTypewriterCommand
+	| TextScrambleCommand
+	| CameraSetCommand
+	| CameraAnimateCommand
 	| ScreenshotCommand;
