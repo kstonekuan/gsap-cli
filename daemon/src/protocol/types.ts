@@ -1,9 +1,6 @@
-export type DaemonMode = "browser" | "terminal";
-
 export interface SuccessResponse {
 	ok: true;
 	id?: string;
-	mode?: string;
 	elements?: number;
 	tweens?: number;
 	timelines?: number;

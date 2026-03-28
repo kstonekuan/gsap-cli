@@ -5,7 +5,7 @@ description: How to use the gsap-cli tool to create and animate scenes from the 
 
 # gsap-cli Usage Guide
 
-This skill teaches you how to use `gsap-cli` to create elements and animate them in real time, rendered in a browser or terminal.
+This skill teaches you how to use `gsap-cli` to create elements and animate them in real time, rendered in the browser.
 
 ## Architecture
 
@@ -13,7 +13,7 @@ This skill teaches you how to use `gsap-cli` to create elements and animate them
 You (the agent) run CLI commands
   → gsap-cli (Rust binary) sends JSON over Unix socket
     → gsap-daemon (Bun process in separate terminal) manages the scene
-      → Browser or terminal renderer displays the animation
+      → Browser renderer displays the animation
 ```
 
 The user starts the daemon manually. You only use the CLI binary.
@@ -28,7 +28,7 @@ gsap-cli status
 
 If you get "Cannot connect to daemon", tell the user to start the daemon:
 ```bash
-bun daemon/src/index.ts --mode browser --port 3000
+bun daemon/src/index.ts --port 3000
 ```
 
 The CLI binary is at `cli/target/release/gsap-cli`. If the binary isn't built, tell the user to run `cd cli && cargo build --release`.

@@ -110,14 +110,6 @@ export class BrowserRenderer implements Renderer {
 		this.broadcast(syncCommand);
 	}
 
-	onTick(_scene: Scene): void {
-		// In browser mode, GSAP runs natively in the browser and is the source
-		// of truth for animated values. Sending daemon-side scene graph data
-		// on every tick would overwrite the browser's GSAP transforms, causing
-		// animations to fight and stutter. Only scene.sync (via onSceneChange)
-		// is sent — for structural changes like element add/remove/set.
-	}
-
 	/** Forward a raw command to browser clients for native GSAP execution */
 	forwardCommand(command: unknown): void {
 		const forwardMessage = {

@@ -1,10 +1,6 @@
 import type { AnimationManager } from "./animation-manager.js";
 import { commandSchema, type ValidatedCommand } from "./protocol/schema.js";
-import type {
-	AnimationControlFields,
-	DaemonMode,
-	Response,
-} from "./protocol/types.js";
+import type { AnimationControlFields, Response } from "./protocol/types.js";
 import type { Renderer } from "./renderers/types.js";
 import type { Scene } from "./scene.js";
 import { captureScreenshot } from "./screenshot.js";
@@ -13,7 +9,6 @@ export interface CommandContext {
 	scene: Scene;
 	animationManager: AnimationManager;
 	renderer: Renderer;
-	mode: DaemonMode;
 	port: number;
 	startTime: number;
 }
@@ -51,7 +46,6 @@ export async function handleCommand(
 			case "status":
 				return {
 					ok: true,
-					mode: context.mode,
 					elements: context.scene.size(),
 					tweens: context.animationManager.activeTweenCount(),
 					timelines: context.animationManager.timelineCount(),
@@ -65,31 +59,22 @@ export async function handleCommand(
 					command.props,
 					command.parent,
 				);
-				if (context.renderer.forwardCommand) {
-					context.renderer.forwardCommand(command);
-				} else {
-					context.renderer.onSceneChange(context.scene);
-				}
+				context.renderer.forwardCommand(command);
+				context.renderer.onSceneChange(context.scene);
 				return { ok: true, id: command.id };
 			}
 
 			case "element.remove": {
 				context.scene.remove(command.id);
-				if (context.renderer.forwardCommand) {
-					context.renderer.forwardCommand(command);
-				} else {
-					context.renderer.onSceneChange(context.scene);
-				}
+				context.renderer.forwardCommand(command);
+				context.renderer.onSceneChange(context.scene);
 				return { ok: true };
 			}
 
 			case "element.set": {
 				context.scene.set(command.id, command.props);
-				if (context.renderer.forwardCommand) {
-					context.renderer.forwardCommand(command);
-				} else {
-					context.renderer.onSceneChange(context.scene);
-				}
+				context.renderer.forwardCommand(command);
+				context.renderer.onSceneChange(context.scene);
 				return { ok: true };
 			}
 
@@ -99,7 +84,7 @@ export async function handleCommand(
 					command.props,
 					extractAnimationControls(command),
 				);
-				context.renderer.forwardCommand?.(command);
+				context.renderer.forwardCommand(command);
 				if (command.wait) {
 					await context.animationManager.waitForTween(id);
 				}
@@ -112,7 +97,7 @@ export async function handleCommand(
 					command.props,
 					extractAnimationControls(command),
 				);
-				context.renderer.forwardCommand?.(command);
+				context.renderer.forwardCommand(command);
 				if (command.wait) {
 					await context.animationManager.waitForTween(id);
 				}
@@ -126,7 +111,7 @@ export async function handleCommand(
 					command.to_props,
 					extractAnimationControls(command),
 				);
-				context.renderer.forwardCommand?.(command);
+				context.renderer.forwardCommand(command);
 				if (command.wait) {
 					await context.animationManager.waitForTween(id);
 				}
@@ -159,7 +144,7 @@ export async function handleCommand(
 					{ motionPath: motionPathConfig },
 					extractAnimationControls(command),
 				);
-				context.renderer.forwardCommand?.(command);
+				context.renderer.forwardCommand(command);
 				if (command.wait) {
 					await context.animationManager.waitForTween(id);
 				}
@@ -171,7 +156,7 @@ export async function handleCommand(
 					command.name,
 					command.defaults,
 				);
-				context.renderer.forwardCommand?.(command);
+				context.renderer.forwardCommand(command);
 				return { ok: true, id };
 			}
 
@@ -184,13 +169,13 @@ export async function handleCommand(
 					command.from_props,
 					command.position,
 				);
-				context.renderer.forwardCommand?.(command);
+				context.renderer.forwardCommand(command);
 				return { ok: true, id };
 			}
 
 			case "timeline.play": {
 				context.animationManager.playTimeline(command.name);
-				context.renderer.forwardCommand?.(command);
+				context.renderer.forwardCommand(command);
 				if (command.wait) {
 					await context.animationManager.waitForTimeline(command.name);
 				}
@@ -199,19 +184,19 @@ export async function handleCommand(
 
 			case "timeline.pause": {
 				context.animationManager.pauseTimeline(command.name);
-				context.renderer.forwardCommand?.(command);
+				context.renderer.forwardCommand(command);
 				return { ok: true };
 			}
 
 			case "timeline.reverse": {
 				context.animationManager.reverseTimeline(command.name);
-				context.renderer.forwardCommand?.(command);
+				context.renderer.forwardCommand(command);
 				return { ok: true };
 			}
 
 			case "timeline.seek": {
 				context.animationManager.seekTimeline(command.name, command.position);
-				context.renderer.forwardCommand?.(command);
+				context.renderer.forwardCommand(command);
 				return { ok: true };
 			}
 
@@ -221,7 +206,7 @@ export async function handleCommand(
 					command.label,
 					command.position,
 				);
-				context.renderer.forwardCommand?.(command);
+				context.renderer.forwardCommand(command);
 				return { ok: true };
 			}
 
@@ -232,7 +217,7 @@ export async function handleCommand(
 					command.duration,
 					command.ease,
 				);
-				context.renderer.forwardCommand?.(command);
+				context.renderer.forwardCommand(command);
 				if (command.wait) {
 					await result.completionPromise;
 				}
@@ -246,7 +231,7 @@ export async function handleCommand(
 					command.duration,
 					command.chars,
 				);
-				context.renderer.forwardCommand?.(command);
+				context.renderer.forwardCommand(command);
 				if (command.wait) {
 					await result.completionPromise;
 				}
@@ -254,22 +239,16 @@ export async function handleCommand(
 			}
 
 			case "camera.set": {
-				context.renderer.forwardCommand?.(command);
+				context.renderer.forwardCommand(command);
 				return { ok: true };
 			}
 
 			case "camera.animate": {
-				context.renderer.forwardCommand?.(command);
+				context.renderer.forwardCommand(command);
 				return { ok: true };
 			}
 
 			case "screenshot": {
-				if (context.mode !== "browser") {
-					return {
-						ok: false,
-						error: "Screenshot is only supported in browser mode",
-					};
-				}
 				await captureScreenshot(context.port, command.output);
 				return { ok: true };
 			}

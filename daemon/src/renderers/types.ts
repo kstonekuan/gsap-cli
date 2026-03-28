@@ -4,6 +4,5 @@ export interface Renderer {
 	start(): Promise<void>;
 	stop(): Promise<void>;
 	onSceneChange(scene: Scene): void;
-	onTick(scene: Scene): void;
-	forwardCommand?(command: unknown): void;
+	forwardCommand(command: unknown): void;
 }
