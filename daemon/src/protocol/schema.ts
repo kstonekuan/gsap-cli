@@ -49,6 +49,11 @@ const elementListCommandSchema = z.object({
 	cmd: z.literal("element.list"),
 });
 
+const elementGetCommandSchema = z.object({
+	cmd: z.literal("element.get"),
+	id: z.string(),
+});
+
 const elementCloneCommandSchema = z.object({
 	cmd: z.literal("element.clone"),
 	source: z.string(),
@@ -207,6 +212,22 @@ const screenshotCommandSchema = z.object({
 	output: z.string(),
 });
 
+const sceneExportCommandSchema = z.object({
+	cmd: z.literal("scene.export"),
+});
+
+const sceneImportCommandSchema = z.object({
+	cmd: z.literal("scene.import"),
+	elements: z.array(
+		z.object({
+			id: z.string(),
+			type: elementTypeSchema,
+			parent: z.string().optional(),
+			props: propsSchema.optional(),
+		}),
+	),
+});
+
 export const commandSchema = z.discriminatedUnion("cmd", [
 	batchCommandSchema,
 	statusCommandSchema,
@@ -215,6 +236,7 @@ export const commandSchema = z.discriminatedUnion("cmd", [
 	elementRemoveCommandSchema,
 	elementSetCommandSchema,
 	elementListCommandSchema,
+	elementGetCommandSchema,
 	elementCloneCommandSchema,
 	gsapSetCommandSchema,
 	animateKillCommandSchema,
@@ -235,6 +257,8 @@ export const commandSchema = z.discriminatedUnion("cmd", [
 	cameraSetCommandSchema,
 	cameraAnimateCommandSchema,
 	screenshotCommandSchema,
+	sceneExportCommandSchema,
+	sceneImportCommandSchema,
 ]);
 
 export type ValidatedCommand = z.infer<typeof commandSchema>;

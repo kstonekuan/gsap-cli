@@ -102,6 +102,21 @@ export async function handleCommand(
 				};
 			}
 
+			case "element.get": {
+				const element = context.scene.get(command.id);
+				if (!element) {
+					throw new Error(`Element "${command.id}" not found`);
+				}
+				const serializable = context.scene.getSerializable(command.id);
+				return {
+					ok: true,
+					id: serializable.id,
+					type: serializable.type,
+					parent: serializable.parent,
+					props: serializable.props,
+				};
+			}
+
 			case "element.clone": {
 				const cloned = context.scene.clone(
 					command.source,
@@ -301,6 +316,39 @@ export async function handleCommand(
 			case "camera.animate": {
 				context.renderer.forwardCommand(command);
 				return { ok: true };
+			}
+
+			case "scene.export": {
+				return {
+					ok: true,
+					scene: context.scene.getAllSerializable(),
+				};
+			}
+
+			case "scene.import": {
+				// Kill all existing animations and clear the scene
+				context.animationManager.killAll();
+				context.scene.clear();
+				context.renderer.forwardCommand({ cmd: "scene.clear" });
+
+				// Add each element in order
+				for (const element of command.elements) {
+					context.scene.add(
+						element.id,
+						element.type,
+						element.props,
+						element.parent,
+					);
+					context.renderer.forwardCommand({
+						cmd: "element.add",
+						id: element.id,
+						type: element.type,
+						parent: element.parent,
+						props: element.props,
+					});
+				}
+				context.renderer.onSceneChange(context.scene);
+				return { ok: true, elements: command.elements.length };
 			}
 
 			case "screenshot": {

@@ -14,6 +14,15 @@ export interface SuccessResponse {
 		props: Record<string, unknown>;
 	}>;
 	results?: Response[];
+	props?: Record<string, unknown>;
+	type?: string;
+	parent?: string;
+	scene?: Array<{
+		id: string;
+		type: string;
+		parent?: string;
+		props: Record<string, unknown>;
+	}>;
 }
 
 export interface ErrorResponse {
@@ -27,10 +36,13 @@ export type CommandType =
 	| "batch"
 	| "status"
 	| "scene.clear"
+	| "scene.export"
+	| "scene.import"
 	| "element.add"
 	| "element.remove"
 	| "element.set"
 	| "element.list"
+	| "element.get"
 	| "element.clone"
 	| "gsap.set"
 	| "animate.to"
@@ -96,6 +108,11 @@ export interface ElementSetCommand extends BaseCommand {
 
 export interface ElementListCommand extends BaseCommand {
 	cmd: "element.list";
+}
+
+export interface ElementGetCommand extends BaseCommand {
+	cmd: "element.get";
+	id: string;
 }
 
 export interface ElementCloneCommand extends BaseCommand {
@@ -259,6 +276,20 @@ export interface SceneClearCommand extends BaseCommand {
 	cmd: "scene.clear";
 }
 
+export interface SceneExportCommand extends BaseCommand {
+	cmd: "scene.export";
+}
+
+export interface SceneImportCommand extends BaseCommand {
+	cmd: "scene.import";
+	elements: Array<{
+		id: string;
+		type: ElementType;
+		parent?: string;
+		props?: Record<string, unknown>;
+	}>;
+}
+
 export interface ScreenshotCommand extends BaseCommand {
 	cmd: "screenshot";
 	output: string;
@@ -272,6 +303,7 @@ export type Command =
 	| ElementRemoveCommand
 	| ElementSetCommand
 	| ElementListCommand
+	| ElementGetCommand
 	| ElementCloneCommand
 	| GsapSetCommand
 	| AnimateToCommand
@@ -291,4 +323,6 @@ export type Command =
 	| TextScrambleCommand
 	| CameraSetCommand
 	| CameraAnimateCommand
-	| ScreenshotCommand;
+	| ScreenshotCommand
+	| SceneExportCommand
+	| SceneImportCommand;

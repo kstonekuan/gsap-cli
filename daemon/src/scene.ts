@@ -119,6 +119,15 @@ export class Scene {
 		return [...this.elements.values()];
 	}
 
+	/** Returns a single element with GSAP internals stripped — safe for JSON.stringify */
+	getSerializable(id: string): SerializableSceneElement {
+		const element = this.elements.get(id);
+		if (!element) {
+			throw new Error(`Element "${id}" not found`);
+		}
+		return toSerializableElement(element);
+	}
+
 	/** Returns all elements with GSAP internals stripped — safe for JSON.stringify */
 	getAllSerializable(): SerializableSceneElement[] {
 		return [...this.elements.values()].map(toSerializableElement);

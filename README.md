@@ -41,8 +41,8 @@ cd daemon && bun install && bun run build
 ### Run
 
 ```bash
-# Terminal 1: Start the daemon
-bun daemon/src/index.ts --port 3000
+# Terminal 1: Start the daemon (--watch auto-reloads on code changes)
+bun --watch daemon/src/index.ts --port 3000
 
 # Terminal 2: Send commands
 gsap-cli status
@@ -68,6 +68,7 @@ gsap-cli element add <id> --type rect|circle|text|line|path|image|html|group [--
 gsap-cli element set <id> --props '{}'            # Set non-transform properties
 gsap-cli element remove <id>
 gsap-cli element list                             # List all elements in the scene
+gsap-cli element get <id> [--json]                # Query current properties of an element
 gsap-cli element clone <source> <new-id> [--props '{}']  # Clone with optional overrides
 ```
 
@@ -125,18 +126,44 @@ gsap-cli camera set [--x 100] [--y 50] [--zoom 1.5] [--rotation 5]
 gsap-cli camera animate [--x 100] [--y 50] [--zoom 1.5] [--rotation 5] [--duration 2] [--ease power2.inOut] [--wait]
 ```
 
-### Batch Mode
+### Scene Export / Import
 
-Send multiple commands in a single IPC round-trip (most efficient for scene setup):
+Save and restore scenes:
 
 ```bash
+gsap-cli scene export --output scene.json         # Export current scene to file
+gsap-cli scene import --input scene.json           # Import scene from file (replaces current)
+```
+
+### Batch Mode
+
+Send multiple commands in a single IPC round-trip. Accepts **JSON arrays** or **CLI commands** (one per line):
+
+```bash
+# JSON format
 echo '[
   {"cmd":"element.add","id":"box1","type":"rect","props":{"x":100,"y":100,"width":80,"height":80,"fill":"#ff0088"}},
   {"cmd":"element.add","id":"box2","type":"rect","props":{"x":300,"y":100,"width":80,"height":80,"fill":"#00ff88"}},
   {"cmd":"gsap.set","target":"box1,box2","props":{"transformOrigin":"50% 50%"}},
   {"cmd":"animate.to","target":"box1,box2","props":{"y":400},"duration":1,"stagger":0.2}
 ]' | gsap-cli batch
+
+# CLI format (supports # comments and blank lines)
+gsap-cli batch --file setup.txt
 ```
+
+Where `setup.txt` contains:
+```
+# Create scene
+element add bg --type rect --props '{"x":0,"y":0,"width":1200,"height":700,"fill":"#0a0a2e"}'
+element add hero --type circle --props '{"x":600,"y":350,"radius":30,"fill":"#ffcc00"}'
+animate to hero --props '{"y":300}' --duration 2 --ease sine.inOut --yoyo --repeat -1
+```
+
+Batch flags:
+- `--file <path>` -- read from a file instead of stdin
+- `--stop-on-error` -- halt on the first command that fails
+- `-q/--quiet` -- suppress per-command output
 
 ### Pipe Mode
 
@@ -160,7 +187,7 @@ gsap-cli screenshot --output /tmp/frame.png
 
 ```bash
 # User starts daemon in another terminal:
-# bun daemon/src/index.ts
+# bun --watch daemon/src/index.ts --port 3000
 
 # Batch-create the scene for efficiency
 echo '[
@@ -191,6 +218,17 @@ Unix domain socket at `/tmp/gsap-cli.sock`. Newline-delimited JSON.
 **Batch request**:
 ```json
 {"cmd": "batch", "commands": [{"cmd": "element.add", ...}, {"cmd": "element.add", ...}]}
+```
+
+**Element get**:
+```json
+{"cmd": "element.get", "id": "box1"}
+```
+
+**Scene export/import**:
+```json
+{"cmd": "scene.export"}
+{"cmd": "scene.import", "elements": [{"id": "box1", "type": "rect", "props": {"x": 100}}]}
 ```
 
 **Response**:

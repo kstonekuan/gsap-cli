@@ -91,6 +91,11 @@ pub enum Command {
     #[serde(rename = "element.list")]
     ElementList,
 
+    #[serde(rename = "element.get")]
+    ElementGet {
+        id: String,
+    },
+
     #[serde(rename = "element.clone")]
     ElementClone {
         source: String,
@@ -270,6 +275,14 @@ pub enum Command {
 
     Screenshot {
         output: String,
+    },
+
+    #[serde(rename = "scene.export")]
+    SceneExport,
+
+    #[serde(rename = "scene.import")]
+    SceneImport {
+        elements: Vec<Value>,
     },
 }
 

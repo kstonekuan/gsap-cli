@@ -5,6 +5,7 @@ pub mod clear;
 pub mod element;
 pub mod gsap_set;
 pub mod pipe;
+pub mod scene;
 pub mod screenshot;
 pub mod status;
 pub mod text;

@@ -26,17 +26,18 @@ Always check if the daemon is running first:
 gsap-cli status
 ```
 
-If you get "Cannot connect to daemon", tell the user to start the daemon:
+If you get "Cannot connect to daemon", tell the user to start the daemon with `--watch` so it auto-reloads on code changes:
 ```bash
-bun daemon/src/index.ts --port 3000
+bun --watch daemon/src/index.ts --port 3000
 ```
 
 The CLI binary is at `cli/target/release/gsap-cli`. If the binary isn't built, tell the user to run `cd cli && cargo build --release`.
 
 ## Performance: Use Batch Mode
 
-Each `gsap-cli` invocation spawns a process and opens a socket connection. For scene setup with many elements, **use batch mode** to send all commands in a single IPC round-trip:
+Each `gsap-cli` invocation spawns a process and opens a socket connection. For scene setup with many elements, **use batch mode** to send all commands in a single connection. Batch accepts two formats:
 
+**JSON format** (traditional):
 ```bash
 echo '[
   {"cmd":"element.add","id":"bg","type":"rect","props":{"x":0,"y":0,"width":1200,"height":700,"fill":"#0a0a1a"}},
@@ -46,6 +47,23 @@ echo '[
   {"cmd":"gsap.set","target":"box1,box2","props":{"transformOrigin":"50% 100%"}}
 ]' | gsap-cli batch
 ```
+
+**CLI format** (same commands you'd type on the command line, from a file):
+```bash
+gsap-cli batch --file scene-setup.txt
+```
+
+Where `scene-setup.txt` contains:
+```
+# Background and elements
+element add bg --type rect --props '{"x":0,"y":0,"width":1200,"height":700,"fill":"#0a0a1a"}'
+element add title --type text --props '{"x":400,"y":300,"text":"Hello","fontSize":64,"fill":"#ffffff","opacity":0}'
+element add box1 --type rect --props '{"x":100,"y":500,"width":200,"height":100,"fill":"#1a1a3a","opacity":0}'
+element add box2 --type rect --props '{"x":500,"y":500,"width":200,"height":100,"fill":"#1a1a3a","opacity":0}'
+set box1,box2 --props '{"transformOrigin":"50% 100%"}'
+```
+
+The format is auto-detected: if input starts with `[`, it's JSON; otherwise, CLI commands.
 
 **When to batch:**
 - Creating 3+ elements at once (scene setup)
@@ -161,8 +179,11 @@ gsap-cli element add <id> --type rect|circle|text|line|path|image|html|group [--
 gsap-cli element set <id> --props '<json>'
 gsap-cli element remove <id>
 gsap-cli element list
+gsap-cli element get <id> [--json]
 gsap-cli element clone <source-id> <new-id> [--props '<override-json>']
 ```
+
+`element get` returns the current properties of an element. Use `--json` for machine-readable output. Useful for querying animated positions or checking element state.
 
 `element clone` creates a copy of an existing element with optional property overrides. Useful for grids, particles, or repeated shapes.
 
@@ -278,12 +299,44 @@ Common easing functions:
 - `elastic.out`, `bounce.out`, `back.out` (expressive)
 - `none` (linear)
 
-### Batch Mode
-Send multiple commands in a single IPC round-trip:
+### Scene Export / Import
+Save and restore full scenes to/from JSON files:
 ```bash
-echo '<json-array>' | gsap-cli batch
+gsap-cli scene export --output scene.json         # Export current scene
+gsap-cli scene import --input scene.json           # Import scene (replaces current)
 ```
-See "Performance: Use Batch Mode" section above for details and examples.
+
+Useful for saving checkpoints during complex scene building, or restoring a known-good scene state.
+
+### Batch Mode
+Send multiple commands in a single batch. Accepts **JSON arrays** or **CLI commands** (one per line):
+
+```bash
+# JSON format (from stdin)
+echo '<json-array>' | gsap-cli batch
+
+# CLI format (from file, supports # comments and blank lines)
+gsap-cli batch --file setup.txt
+```
+
+See "Performance: Use Batch Mode" section above for JSON examples.
+
+CLI-format batch file example:
+```
+# Scene setup
+element add bg --type rect --props '{"x":0,"y":0,"width":1200,"height":700,"fill":"#0a0a2e"}'
+element add hero --type circle --props '{"x":600,"y":350,"radius":30,"fill":"#ffcc00"}'
+
+# Start animation
+animate to hero --props '{"y":300}' --duration 2 --ease sine.inOut --yoyo --repeat -1
+```
+
+Batch flags:
+- `--file <path>` -- read from a file instead of stdin
+- `--stop-on-error` -- halt on the first command that fails
+- `-q/--quiet` -- suppress per-command output (just print ok/error summary)
+
+Output shows per-command progress: `[1/5] ok: hero`, `[2/5] error: Element not found`.
 
 ### Pipe Mode
 Stream JSON commands over a persistent connection (one per line, responses on stdout):
@@ -300,42 +353,45 @@ gsap-cli screenshot --output /tmp/frame.png
 ## Patterns
 
 ### Batched Scene Setup
-The most efficient way to build a scene -- batch all element creation and initial property setup:
+The most efficient way to build a scene -- batch all element creation and initial property setup.
 
+**CLI-format batch file** (recommended -- easier to read and write):
+```bash
+gsap-cli batch --file scene.txt
+```
+Where `scene.txt` contains:
+```
+# Scene elements
+element add bg --type rect --props '{"x":0,"y":0,"width":1200,"height":700,"fill":"#0a0a1a"}'
+element add title --type text --props '{"x":368,"y":260,"text":"GSAP CLI","fontSize":96,"fill":"#ffffff","opacity":0,"fontFamily":"monospace"}'
+element add subtitle --type text --props '{"x":312,"y":380,"text":"AI-Driven Animation Engine","fontSize":28,"fill":"#00ff88","opacity":0,"fontFamily":"monospace"}'
+element add box1 --type rect --props '{"x":100,"y":520,"width":260,"height":130,"fill":"#1a1a3a","opacity":0,"borderRadius":12}'
+element add box2 --type rect --props '{"x":420,"y":520,"width":260,"height":130,"fill":"#1a1a3a","opacity":0,"borderRadius":12}'
+element add box3 --type rect --props '{"x":740,"y":520,"width":260,"height":130,"fill":"#1a1a3a","opacity":0,"borderRadius":12}'
+
+# Timeline setup
+timeline create show --defaults '{"duration":0.8,"ease":"power3.out"}'
+timeline add show fromTo title --from-props '{"opacity":0,"y":290}' --props '{"opacity":1,"y":260}' --position "0"
+timeline add show to subtitle --props '{"opacity":1}' --position "0.9"
+timeline add show fromTo box1 --from-props '{"opacity":0,"y":570}' --props '{"opacity":1,"y":520}' --position "1.8"
+timeline add show fromTo box2 --from-props '{"opacity":0,"y":570}' --props '{"opacity":1,"y":520}' --position "1.95"
+timeline add show fromTo box3 --from-props '{"opacity":0,"y":570}' --props '{"opacity":1,"y":520}' --position "2.1"
+```
+
+Then play the timeline (needs `--wait` so it runs separately):
+```bash
+gsap-cli timeline play show --wait
+```
+
+**JSON-format batch** (alternative -- better for programmatic generation):
 ```bash
 echo '[
   {"cmd":"element.add","id":"bg","type":"rect","props":{"x":0,"y":0,"width":1200,"height":700,"fill":"#0a0a1a"}},
   {"cmd":"element.add","id":"title","type":"text","props":{"x":368,"y":260,"text":"GSAP CLI","fontSize":96,"fill":"#ffffff","opacity":0,"fontFamily":"monospace"}},
-  {"cmd":"element.add","id":"subtitle","type":"text","props":{"x":312,"y":380,"text":"AI-Driven Animation Engine","fontSize":28,"fill":"#00ff88","opacity":0,"fontFamily":"monospace"}},
   {"cmd":"element.add","id":"box1","type":"rect","props":{"x":100,"y":520,"width":260,"height":130,"fill":"#1a1a3a","opacity":0,"borderRadius":12}},
   {"cmd":"element.add","id":"box2","type":"rect","props":{"x":420,"y":520,"width":260,"height":130,"fill":"#1a1a3a","opacity":0,"borderRadius":12}},
   {"cmd":"element.add","id":"box3","type":"rect","props":{"x":740,"y":520,"width":260,"height":130,"fill":"#1a1a3a","opacity":0,"borderRadius":12}}
 ]' | gsap-cli batch
-```
-
-Then use individual commands for the timeline (since `--wait` needs sequential execution):
-```bash
-gsap-cli timeline create show --defaults '{"duration":0.8,"ease":"power3.out"}'
-gsap-cli timeline add show fromTo title --from-props '{"opacity":0,"y":290}' --props '{"opacity":1,"y":260}' --position "0"
-gsap-cli timeline add show to subtitle --props '{"opacity":1}' --position "0.9"
-gsap-cli timeline add show fromTo box1 --from-props '{"opacity":0,"y":570}' --props '{"opacity":1,"y":520}' --position "1.8"
-gsap-cli timeline add show fromTo box2 --from-props '{"opacity":0,"y":570}' --props '{"opacity":1,"y":520}' --position "1.95"
-gsap-cli timeline add show fromTo box3 --from-props '{"opacity":0,"y":570}' --props '{"opacity":1,"y":520}' --position "2.1"
-gsap-cli timeline play show --wait
-```
-
-You can also batch the timeline setup (create + add tweens) since those don't need `--wait`:
-```bash
-echo '[
-  {"cmd":"timeline.create","name":"show","defaults":{"duration":0.8,"ease":"power3.out"}},
-  {"cmd":"timeline.add","name":"show","tween_type":"fromTo","target":"title","from_props":{"opacity":0,"y":290},"props":{"opacity":1,"y":260},"position":"0"},
-  {"cmd":"timeline.add","name":"show","tween_type":"to","target":"subtitle","props":{"opacity":1},"position":"0.9"},
-  {"cmd":"timeline.add","name":"show","tween_type":"fromTo","target":"box1","from_props":{"opacity":0,"y":570},"props":{"opacity":1,"y":520},"position":"1.8"},
-  {"cmd":"timeline.add","name":"show","tween_type":"fromTo","target":"box2","from_props":{"opacity":0,"y":570},"props":{"opacity":1,"y":520},"position":"1.95"},
-  {"cmd":"timeline.add","name":"show","tween_type":"fromTo","target":"box3","from_props":{"opacity":0,"y":570},"props":{"opacity":1,"y":520},"position":"2.1"}
-]' | gsap-cli batch
-
-gsap-cli timeline play show --wait
 ```
 
 ### Skeletal Animation with Joint Pivots
@@ -502,6 +558,7 @@ The browser canvas size depends on the user's browser window. Design for ~1200x7
 
 - Always run `gsap-cli status` first to verify the daemon is connected
 - **Batch element creation** -- use `gsap-cli batch` for 3+ elements to avoid per-command IPC overhead
+- **CLI-style batch files** are easier to read and write than JSON -- use `gsap-cli batch --file setup.txt` with one CLI command per line
 - Use single quotes around JSON props to avoid shell escaping issues
 - Build the full scene first (elements at opacity 0), then animate them in -- this prevents visual pop-in
 - Use `--wait` on `timeline play` to block until animations complete before starting the next phase
@@ -512,3 +569,6 @@ The browser canvas size depends on the user's browser window. Design for ~1200x7
 - Use `gsap-cli clear` to reset the scene between demos
 - Use `element clone` to duplicate elements instead of re-specifying all props
 - Use `gsap-cli set` (not `element set`) for transform properties like `transformOrigin` and `rotation`
+- Use `element get <id>` to query current element properties (e.g., animated position)
+- Use `scene export/import` to save and restore scene checkpoints
+- Start the daemon with `bun --watch` so it auto-reloads when you change daemon source files
