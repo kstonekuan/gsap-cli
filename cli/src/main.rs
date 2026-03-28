@@ -16,6 +16,9 @@ enum CliCommand {
     /// Check daemon connectivity and status
     Status,
 
+    /// Clear all elements and animations
+    Clear,
+
     /// Manage scene elements
     #[command(subcommand)]
     Element(ElementCommand),
@@ -69,11 +72,28 @@ enum CliCommand {
         wait: bool,
     },
 
+    /// Instantly set GSAP properties (rotation, scale, transformOrigin, etc.)
+    Set {
+        /// Target element ID, comma-separated IDs, or * for all
+        target: String,
+
+        /// Properties as JSON
+        #[arg(long)]
+        props: String,
+    },
+
     /// Query animation status
     #[command(name = "animate-status")]
     AnimateStatus {
         /// Tween ID (e.g., `tween_1`)
         id: String,
+    },
+
+    /// Kill all animations on a target
+    #[command(name = "animate-kill")]
+    AnimateKill {
+        /// Target element ID, comma-separated IDs, or * for all
+        target: String,
     },
 
     /// Animate an element along an SVG path
@@ -127,6 +147,9 @@ enum CliCommand {
     #[command(subcommand)]
     Camera(CameraCommand),
 
+    /// Send multiple commands in a single batch (JSON array from stdin)
+    Batch,
+
     /// STDIN streaming mode (JSON per line)
     Pipe,
 
@@ -173,6 +196,22 @@ enum ElementCommand {
         #[arg(long)]
         props: String,
     },
+
+    /// List all elements in the scene
+    List,
+
+    /// Clone an existing element
+    Clone {
+        /// Source element ID to clone from
+        source: String,
+
+        /// New element ID
+        id: String,
+
+        /// Override properties as JSON
+        #[arg(long)]
+        props: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -185,6 +224,14 @@ enum TimelineCommand {
         /// Default tween properties as JSON
         #[arg(long)]
         defaults: Option<String>,
+
+        /// Repeat count (-1 for infinite)
+        #[arg(long, allow_hyphen_values = true)]
+        repeat: Option<f64>,
+
+        /// Reverse on alternate repeats
+        #[arg(long)]
+        yoyo: bool,
     },
 
     /// Add a tween to a timeline
@@ -209,6 +256,10 @@ enum TimelineCommand {
         /// Timeline position parameter
         #[arg(long)]
         position: Option<String>,
+
+        /// Stagger delay between elements (seconds)
+        #[arg(long)]
+        stagger: Option<f64>,
     },
 
     /// Play a timeline
@@ -364,6 +415,7 @@ fn main() {
 
     match cli.command {
         CliCommand::Status => commands::status::run(),
+        CliCommand::Clear => commands::clear::run(),
         CliCommand::Element(element_command) => match element_command {
             ElementCommand::Add {
                 id,
@@ -373,7 +425,12 @@ fn main() {
             } => commands::element::add(id, r#type, parent, props),
             ElementCommand::Remove { id } => commands::element::remove(id),
             ElementCommand::Set { id, props } => commands::element::set(id, props),
+            ElementCommand::List => commands::element::list(),
+            ElementCommand::Clone { source, id, props } => {
+                commands::element::clone(source, id, props);
+            }
         },
+        CliCommand::Set { target, props } => commands::gsap_set::run(target, props),
         CliCommand::Animate {
             tween_type,
             target,
@@ -402,6 +459,7 @@ fn main() {
             wait,
         ),
         CliCommand::AnimateStatus { id } => commands::animate::status(id),
+        CliCommand::AnimateKill { target } => commands::animate::kill(target),
         CliCommand::MotionPath {
             target,
             path,
@@ -424,8 +482,13 @@ fn main() {
             wait,
         ),
         CliCommand::Timeline(timeline_command) => match timeline_command {
-            TimelineCommand::Create { name, defaults } => {
-                commands::timeline::create(name, defaults);
+            TimelineCommand::Create {
+                name,
+                defaults,
+                repeat,
+                yoyo,
+            } => {
+                commands::timeline::create(name, defaults, repeat, yoyo);
             }
             TimelineCommand::Add {
                 name,
@@ -434,7 +497,10 @@ fn main() {
                 props,
                 from_props,
                 position,
-            } => commands::timeline::add(name, tween_type, target, props, from_props, position),
+                stagger,
+            } => commands::timeline::add(
+                name, tween_type, target, props, from_props, position, stagger,
+            ),
             TimelineCommand::Play { name, wait } => commands::timeline::play(name, wait),
             TimelineCommand::Pause { name } => commands::timeline::pause(name),
             TimelineCommand::Reverse { name } => commands::timeline::reverse(name),
@@ -481,6 +547,7 @@ fn main() {
                 wait,
             } => commands::camera::animate(x, y, zoom, rotation, duration, ease, wait),
         },
+        CliCommand::Batch => commands::batch::run(),
         CliCommand::Pipe => commands::pipe::run(),
         CliCommand::Screenshot { output } => commands::screenshot::run(output),
     }

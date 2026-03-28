@@ -124,6 +124,32 @@ export class Scene {
 		return [...this.elements.values()].map(toSerializableElement);
 	}
 
+	clone(
+		sourceId: string,
+		newId: string,
+		overrideProps?: Record<string, unknown>,
+	): SceneElement {
+		const source = this.elements.get(sourceId);
+		if (!source) {
+			throw new Error(`Element "${sourceId}" not found`);
+		}
+		if (this.elements.has(newId)) {
+			throw new Error(`Element "${newId}" already exists`);
+		}
+		const element: SceneElement = {
+			id: newId,
+			type: source.type,
+			parent: source.parent,
+			props: { ...structuredClone(source.props), ...(overrideProps ?? {}) },
+		};
+		this.elements.set(newId, element);
+		return element;
+	}
+
+	clear(): void {
+		this.elements.clear();
+	}
+
 	size(): number {
 		return this.elements.size;
 	}

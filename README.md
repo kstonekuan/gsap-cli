@@ -14,12 +14,12 @@ CLI binary (gsap-cli, Rust)
 Daemon (gsap-daemon, TypeScript/Bun)
   |  manages scene graph + forwards commands
   v
-Browser renderer
+Browser (GSAP runs natively)
 ```
 
 - **CLI**: Single static Rust binary (~1ms startup). Sends commands over Unix socket.
 - **Daemon**: Bun process running in a separate terminal. Manages the scene graph, GSAP tweens/timelines, and the browser renderer.
-- **Browser**: GSAP runs natively in the browser via WebSocket relay — full animation fidelity without pushing 60fps data over the wire.
+- **Browser**: GSAP runs natively in the browser via WebSocket relay -- full animation fidelity without pushing 60fps data over the wire.
 
 ## Prerequisites
 
@@ -54,18 +54,29 @@ The CLI binary is at `cli/target/release/gsap-cli`.
 
 ## CLI Commands
 
-### Status
+### Status & Scene
 
 ```bash
-gsap-cli status
+gsap-cli status                                   # Check daemon connectivity
+gsap-cli clear                                    # Remove all elements and kill all animations
 ```
 
 ### Elements
 
 ```bash
 gsap-cli element add <id> --type rect|circle|text|line|path|image|html|group [--parent <group-id>] [--props '{}']
+gsap-cli element set <id> --props '{}'            # Set non-transform properties
 gsap-cli element remove <id>
-gsap-cli element set <id> --props '{}'
+gsap-cli element list                             # List all elements in the scene
+gsap-cli element clone <source> <new-id> [--props '{}']  # Clone with optional overrides
+```
+
+### GSAP Set
+
+Instantly set any GSAP property (rotation, scale, transformOrigin) without animation:
+
+```bash
+gsap-cli set <target> --props '{"transformOrigin":"50% 0%","rotation":45}'
 ```
 
 ### Animation
@@ -74,19 +85,13 @@ gsap-cli element set <id> --props '{}'
 gsap-cli animate to|from|fromTo <target> --props '{}' [--from-props '{}'] \
   [--duration 1] [--ease power2.out] [--stagger 0.1] \
   [--repeat -1] [--yoyo] [--delay 0] [--repeat-delay 0] [--wait]
+gsap-cli animate-status <tween-id>                # Query tween state
+gsap-cli animate-kill <target>                    # Kill all tweens on target
 ```
 
 Target can be a single ID, comma-separated IDs (`box1,box2`), or `*` for all elements.
 
-### Animation Status
-
-```bash
-gsap-cli animate-status <tween-id>
-```
-
 ### Motion Path
-
-Animate an element along an SVG path:
 
 ```bash
 gsap-cli motion-path <target> --path "M0,0 C100,-100 200,100 300,0" \
@@ -97,8 +102,8 @@ gsap-cli motion-path <target> --path "M0,0 C100,-100 200,100 300,0" \
 ### Timelines
 
 ```bash
-gsap-cli timeline create <name> [--defaults '{}']
-gsap-cli timeline add <name> to|from|fromTo <target> --props '{}' [--from-props '{}'] [--position "<"]
+gsap-cli timeline create <name> [--defaults '{}'] [--repeat -1] [--yoyo]
+gsap-cli timeline add <name> to|from|fromTo <target> --props '{}' [--from-props '{}'] [--position "<"] [--stagger 0.1]
 gsap-cli timeline play <name> [--wait]
 gsap-cli timeline pause <name>
 gsap-cli timeline reverse <name>
@@ -120,9 +125,22 @@ gsap-cli camera set [--x 100] [--y 50] [--zoom 1.5] [--rotation 5]
 gsap-cli camera animate [--x 100] [--y 50] [--zoom 1.5] [--rotation 5] [--duration 2] [--ease power2.inOut] [--wait]
 ```
 
+### Batch Mode
+
+Send multiple commands in a single IPC round-trip (most efficient for scene setup):
+
+```bash
+echo '[
+  {"cmd":"element.add","id":"box1","type":"rect","props":{"x":100,"y":100,"width":80,"height":80,"fill":"#ff0088"}},
+  {"cmd":"element.add","id":"box2","type":"rect","props":{"x":300,"y":100,"width":80,"height":80,"fill":"#00ff88"}},
+  {"cmd":"gsap.set","target":"box1,box2","props":{"transformOrigin":"50% 50%"}},
+  {"cmd":"animate.to","target":"box1,box2","props":{"y":400},"duration":1,"stagger":0.2}
+]' | gsap-cli batch
+```
+
 ### Pipe Mode
 
-Stream JSON commands via stdin for agent integration:
+Stream JSON commands over a persistent connection:
 
 ```bash
 gsap-cli pipe
@@ -144,12 +162,19 @@ gsap-cli screenshot --output /tmp/frame.png
 # User starts daemon in another terminal:
 # bun daemon/src/index.ts
 
-gsap-cli element add box --type rect --props '{"x":100,"y":200,"width":80,"height":80,"fill":"#00ff88"}'
-gsap-cli element add title --type text --props '{"x":400,"y":50,"text":"Hello","fontSize":48,"fill":"#fff"}'
+# Batch-create the scene for efficiency
+echo '[
+  {"cmd":"element.add","id":"box","type":"rect","props":{"x":100,"y":200,"width":80,"height":80,"fill":"#00ff88"}},
+  {"cmd":"element.add","id":"title","type":"text","props":{"x":400,"y":50,"text":"Hello","fontSize":48,"fill":"#fff"}}
+]' | gsap-cli batch
+
+# Build and play a timeline
 gsap-cli timeline create intro --defaults '{"duration":0.8,"ease":"power2.out"}'
 gsap-cli timeline add intro to title --props '{"y":80,"opacity":1}' --position "0"
 gsap-cli timeline add intro to box --props '{"x":350,"rotation":360}' --position "<0.2"
-gsap-cli timeline play intro
+gsap-cli timeline play intro --wait
+
+# Capture and review
 gsap-cli screenshot --output /tmp/frame.png
 # Agent reads screenshot, decides next animation...
 ```
@@ -163,6 +188,11 @@ Unix domain socket at `/tmp/gsap-cli.sock`. Newline-delimited JSON.
 {"cmd": "animate.to", "target": "box1", "props": {"x": 200}, "duration": 1, "ease": "power2.out"}
 ```
 
+**Batch request**:
+```json
+{"cmd": "batch", "commands": [{"cmd": "element.add", ...}, {"cmd": "element.add", ...}]}
+```
+
 **Response**:
 ```json
 {"ok": true, "id": "tween_3"}
@@ -171,5 +201,3 @@ Unix domain socket at `/tmp/gsap-cli.sock`. Newline-delimited JSON.
 ## Contributing
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for code quality tools and style guidelines.
-
-

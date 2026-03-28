@@ -266,6 +266,21 @@ function extractAnimationControls(command) {
 
 function handleCommand(command) {
 	switch (command.cmd) {
+		case "scene.clear":
+			gsap.killTweensOf("*");
+			for (const [id] of elements) {
+				const entry = elements.get(id);
+				if (entry) entry.dom.remove();
+			}
+			elements.clear();
+			if (window.__timelines) {
+				for (const tl of Object.values(window.__timelines)) {
+					tl.kill();
+				}
+				window.__timelines = {};
+			}
+			break;
+
 		case "element.add":
 			createOrUpdateElement({
 				id: command.id,
@@ -284,6 +299,25 @@ function handleCommand(command) {
 			if (entry) {
 				Object.assign(entry.props, command.props);
 				applyProps(entry.dom, entry.type, entry.props);
+			}
+			break;
+		}
+
+		case "gsap.set": {
+			const targets = resolveTargets(command.target);
+			if (targets.length > 0) {
+				gsap.set(
+					targets.length === 1 ? targets[0] : targets,
+					propsToGsap(command.props),
+				);
+			}
+			break;
+		}
+
+		case "animate.kill": {
+			const targets = resolveTargets(command.target);
+			for (const target of targets) {
+				gsap.killTweensOf(target);
 			}
 			break;
 		}
@@ -349,10 +383,13 @@ function handleCommand(command) {
 		}
 
 		case "timeline.create": {
-			const timeline = gsap.timeline({
+			const timelineVars = {
 				paused: true,
 				defaults: command.defaults || {},
-			});
+			};
+			if (command.repeat !== undefined) timelineVars.repeat = command.repeat;
+			if (command.yoyo !== undefined) timelineVars.yoyo = command.yoyo;
+			const timeline = gsap.timeline(timelineVars);
 			window.__timelines = window.__timelines || {};
 			window.__timelines[command.name] = timeline;
 			break;
@@ -364,17 +401,14 @@ function handleCommand(command) {
 			if (tl && targets.length > 0) {
 				const position = command.position || "+=0";
 				const target = targets.length === 1 ? targets[0] : targets;
+				const toGsap = propsToGsap(command.props);
+				if (command.stagger) toGsap.stagger = command.stagger;
 				if (command.tween_type === "to") {
-					tl.to(target, propsToGsap(command.props), position);
+					tl.to(target, toGsap, position);
 				} else if (command.tween_type === "from") {
-					tl.from(target, propsToGsap(command.props), position);
+					tl.from(target, toGsap, position);
 				} else if (command.tween_type === "fromTo" && command.from_props) {
-					tl.fromTo(
-						target,
-						propsToGsap(command.from_props),
-						propsToGsap(command.props),
-						position,
-					);
+					tl.fromTo(target, propsToGsap(command.from_props), toGsap, position);
 				}
 			}
 			break;

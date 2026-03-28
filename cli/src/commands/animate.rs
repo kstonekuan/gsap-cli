@@ -112,6 +112,10 @@ pub fn status(id: String) {
     }
 }
 
+pub fn kill(target: String) {
+    send_and_print(&Command::AnimateKill { target });
+}
+
 fn parse_json(input: &str, label: &str) -> Value {
     serde_json::from_str(input).unwrap_or_else(|e| {
         eprintln!("Invalid JSON for {label}: {e}");

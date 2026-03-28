@@ -7,6 +7,13 @@ export interface SuccessResponse {
 	uptime?: number;
 	active?: boolean;
 	progress?: number;
+	list?: Array<{
+		id: string;
+		type: string;
+		parent?: string;
+		props: Record<string, unknown>;
+	}>;
+	results?: Response[];
 }
 
 export interface ErrorResponse {
@@ -17,14 +24,20 @@ export interface ErrorResponse {
 export type Response = SuccessResponse | ErrorResponse;
 
 export type CommandType =
+	| "batch"
 	| "status"
+	| "scene.clear"
 	| "element.add"
 	| "element.remove"
 	| "element.set"
+	| "element.list"
+	| "element.clone"
+	| "gsap.set"
 	| "animate.to"
 	| "animate.from"
 	| "animate.fromTo"
 	| "animate.status"
+	| "animate.kill"
 	| "animate.motionPath"
 	| "timeline.create"
 	| "timeline.add"
@@ -41,6 +54,11 @@ export type CommandType =
 
 export interface BaseCommand {
 	cmd: CommandType;
+}
+
+export interface BatchCommand extends BaseCommand {
+	cmd: "batch";
+	commands: Array<Record<string, unknown>>;
 }
 
 export interface StatusCommand extends BaseCommand {
@@ -74,6 +92,28 @@ export interface ElementSetCommand extends BaseCommand {
 	cmd: "element.set";
 	id: string;
 	props: Record<string, unknown>;
+}
+
+export interface ElementListCommand extends BaseCommand {
+	cmd: "element.list";
+}
+
+export interface ElementCloneCommand extends BaseCommand {
+	cmd: "element.clone";
+	source: string;
+	id: string;
+	props?: Record<string, unknown>;
+}
+
+export interface GsapSetCommand extends BaseCommand {
+	cmd: "gsap.set";
+	target: string;
+	props: Record<string, unknown>;
+}
+
+export interface AnimateKillCommand extends BaseCommand {
+	cmd: "animate.kill";
+	target: string;
 }
 
 export interface AnimationControlFields {
@@ -131,6 +171,8 @@ export interface TimelineCreateCommand extends BaseCommand {
 	cmd: "timeline.create";
 	name: string;
 	defaults?: Record<string, unknown>;
+	repeat?: number;
+	yoyo?: boolean;
 }
 
 export type TweenType = "to" | "from" | "fromTo";
@@ -143,6 +185,7 @@ export interface TimelineAddCommand extends BaseCommand {
 	props: Record<string, unknown>;
 	from_props?: Record<string, unknown>;
 	position?: string;
+	stagger?: number;
 }
 
 export interface TimelinePlayCommand extends BaseCommand {
@@ -212,17 +255,27 @@ export interface CameraAnimateCommand extends BaseCommand {
 	wait?: boolean;
 }
 
+export interface SceneClearCommand extends BaseCommand {
+	cmd: "scene.clear";
+}
+
 export interface ScreenshotCommand extends BaseCommand {
 	cmd: "screenshot";
 	output: string;
 }
 
 export type Command =
+	| BatchCommand
 	| StatusCommand
+	| SceneClearCommand
 	| ElementAddCommand
 	| ElementRemoveCommand
 	| ElementSetCommand
+	| ElementListCommand
+	| ElementCloneCommand
+	| GsapSetCommand
 	| AnimateToCommand
+	| AnimateKillCommand
 	| AnimateFromCommand
 	| AnimateFromToCommand
 	| AnimateStatusCommand

@@ -11,9 +11,9 @@ This skill teaches you how to use `gsap-cli` to create elements and animate them
 
 ```
 You (the agent) run CLI commands
-  → gsap-cli (Rust binary) sends JSON over Unix socket
-    → gsap-daemon (Bun process in separate terminal) manages the scene
-      → Browser renderer displays the animation
+  -> gsap-cli (Rust binary) sends JSON over Unix socket
+    -> gsap-daemon (Bun process in separate terminal) manages the scene
+      -> Browser renderer displays the animation via GSAP natively
 ```
 
 The user starts the daemon manually. You only use the CLI binary.
@@ -33,6 +33,31 @@ bun daemon/src/index.ts --port 3000
 
 The CLI binary is at `cli/target/release/gsap-cli`. If the binary isn't built, tell the user to run `cd cli && cargo build --release`.
 
+## Performance: Use Batch Mode
+
+Each `gsap-cli` invocation spawns a process and opens a socket connection. For scene setup with many elements, **use batch mode** to send all commands in a single IPC round-trip:
+
+```bash
+echo '[
+  {"cmd":"element.add","id":"bg","type":"rect","props":{"x":0,"y":0,"width":1200,"height":700,"fill":"#0a0a1a"}},
+  {"cmd":"element.add","id":"title","type":"text","props":{"x":400,"y":300,"text":"Hello","fontSize":64,"fill":"#ffffff","opacity":0}},
+  {"cmd":"element.add","id":"box1","type":"rect","props":{"x":100,"y":500,"width":200,"height":100,"fill":"#1a1a3a","opacity":0}},
+  {"cmd":"element.add","id":"box2","type":"rect","props":{"x":500,"y":500,"width":200,"height":100,"fill":"#1a1a3a","opacity":0}},
+  {"cmd":"gsap.set","target":"box1,box2","props":{"transformOrigin":"50% 100%"}}
+]' | gsap-cli batch
+```
+
+**When to batch:**
+- Creating 3+ elements at once (scene setup)
+- Setting initial GSAP properties on multiple elements (transformOrigin, scale)
+- Any sequence of commands that don't need intermediate responses
+
+**When NOT to batch:**
+- Commands with `--wait` (need to block before next step)
+- Interactive sequences where you need to read responses between steps
+- Single commands (no benefit)
+
+For individual shell commands, **combine multiple independent commands in a single Bash call** using `&&` or newlines to avoid multiple shell round-trips.
 
 ## Element Types
 
@@ -51,7 +76,7 @@ gsap-cli element add dot --type circle --props '{"x":300,"y":200,"radius":40,"fi
 Props: `x`, `y`, `radius` (default 40), `fill` (hex color), `opacity`
 
 ### text
-A text label. Positioned by its **top-left corner** — you must manually offset `x` to visually center text.
+A text label. Positioned by its **top-left corner** -- you must manually offset `x` to visually center text.
 ```bash
 gsap-cli element add title --type text --props '{"x":200,"y":50,"text":"Hello World","fontSize":32,"fill":"#ffffff","fontFamily":"monospace"}'
 ```
@@ -79,7 +104,7 @@ gsap-cli element add logo --type image --props '{"x":100,"y":100,"src":"https://
 Props: `x`, `y`, `src`, `alt`, `width`, `height`, `opacity`
 
 ### group
-A container for nesting child elements. Children are positioned relative to the group.
+A container for nesting child elements. Children are positioned relative to the group. Animating a group's `rotation` or `scale` affects all children -- useful for skeletal animation with joint pivots.
 ```bash
 gsap-cli element add panel --type group --props '{"x":100,"y":100}'
 gsap-cli element add label --type text --parent panel --props '{"x":10,"y":10,"text":"Inside group"}'
@@ -95,14 +120,16 @@ Props: `x`, `y`, `innerHTML`, `width`, `height`, `opacity`
 
 ## Animatable Properties
 
-These properties can be animated with `gsap-cli animate` or timeline tweens:
+These properties can be animated with `gsap-cli animate`, `gsap-cli set`, or timeline tweens:
 
 | Property | Description | Notes |
 |----------|------------|-------|
 | `x` | Horizontal position (px) | Transform-based, smooth |
 | `y` | Vertical position (px) | Transform-based, smooth |
 | `rotation` | Rotation in degrees | e.g., 360 for full spin |
-| `scale` | Uniform scale factor | Browser mode only; stripped on daemon side |
+| `scale` | Uniform scale factor | Use `gsap-cli set` for initial value |
+| `scaleX`, `scaleY` | Axis-specific scale | Use `gsap-cli set` for initial value |
+| `transformOrigin` | Pivot point for rotation/scale | e.g., `"50% 0%"`, `"0px 0px"` |
 | `opacity` | Transparency (0-1) | Great for fade in/out |
 | `width` | Element width (px) | Rect/image/html only |
 | `height` | Element height (px) | Rect/image/html only |
@@ -113,21 +140,38 @@ These properties can be animated with `gsap-cli animate` or timeline tweens:
 | `stroke` | Stroke color | Line/path only |
 | `strokeWidth` | Stroke width | Line/path only |
 
-Note: `scale`, `scaleX`, `scaleY` work in the browser renderer via GSAP's native transform handling, but the daemon-side scene graph doesn't track them. Use them in browser mode only.
+Note: `rotation`, `scale`, `transformOrigin` are GSAP transform properties. Use `gsap-cli set` (not `element set`) to set them instantly. `element set` only handles non-transform properties like `x`, `y`, `fill`, `text`.
 
 ## Commands
 
-### Check Status
+### Status
 ```bash
 gsap-cli status
 ```
 
-### Create Elements
+### Clear Scene
+```bash
+gsap-cli clear
+```
+Removes all elements and kills all tweens/timelines in one command.
+
+### Elements
 ```bash
 gsap-cli element add <id> --type rect|circle|text|line|path|image|html|group [--parent <group-id>] [--props '<json>']
 gsap-cli element set <id> --props '<json>'
 gsap-cli element remove <id>
+gsap-cli element list
+gsap-cli element clone <source-id> <new-id> [--props '<override-json>']
 ```
+
+`element clone` creates a copy of an existing element with optional property overrides. Useful for grids, particles, or repeated shapes.
+
+### Instant GSAP Set
+Instantly set any GSAP property (rotation, scale, transformOrigin, etc.) without animation:
+```bash
+gsap-cli set <target> --props '{"transformOrigin":"50% 0%","rotation":45,"scale":1.5}'
+```
+Use this instead of `element set` when you need to set GSAP transform properties. Target can be id, comma-separated, or `*`.
 
 ### Animate
 ```bash
@@ -144,14 +188,21 @@ gsap-cli animate fromTo <target> --props '<to-json>' --from-props '<from-json>' 
 Target can be: a single element ID, comma-separated IDs (`box1,box2,box3`), or `*` for all elements.
 
 Additional animate flags:
-- `--stagger <seconds>` — delay between each element when targeting multiple
-- `--repeat <n>` — repeat count (`--repeat -1` for infinite)
-- `--yoyo` — reverse on alternate repeats (great with `--repeat`)
-- `--delay <seconds>` — delay before starting
-- `--repeat-delay <seconds>` — delay between repeats
-- `--wait` — block until animation completes
+- `--stagger <seconds>` -- delay between each element when targeting multiple
+- `--repeat <n>` -- repeat count (`--repeat -1` for infinite)
+- `--yoyo` -- reverse on alternate repeats (great with `--repeat`)
+- `--delay <seconds>` -- delay before starting
+- `--repeat-delay <seconds>` -- delay between repeats
+- `--wait` -- block until animation completes
 
 Defaults: duration=1 second, ease="power2.out"
+
+### Kill Animations
+Stop all animations on a target:
+```bash
+gsap-cli animate-kill <target>
+```
+Target can be id, comma-separated, or `*` for all. Use before replacing animations or cleaning up looping tweens.
 
 ### Animation Status
 Query the state of an active tween:
@@ -171,11 +222,11 @@ gsap-cli motion-path <target> --path "M0,0 C100,-100 200,100 300,0" \
 Timelines let you sequence multiple animations with precise timing control.
 
 ```bash
-# Create a paused timeline with optional defaults
-gsap-cli timeline create <name> [--defaults '{"duration":0.8,"ease":"power2.out"}']
+# Create a paused timeline with optional defaults, repeat, yoyo
+gsap-cli timeline create <name> [--defaults '{"duration":0.8,"ease":"power2.out"}'] [--repeat -1] [--yoyo]
 
-# Add tweens to the timeline
-gsap-cli timeline add <name> to|from|fromTo <target> --props '<json>' [--from-props '<json>'] [--position "<"]
+# Add tweens to the timeline (target can be id, comma-separated, or *)
+gsap-cli timeline add <name> to|from|fromTo <target> --props '<json>' [--from-props '<json>'] [--position "<"] [--stagger 0.1]
 
 # Control playback
 gsap-cli timeline play <name> [--wait]
@@ -201,10 +252,10 @@ The `--position` flag controls when a tween starts relative to others:
 
 ### Text Effects
 ```bash
-# Typewriter — reveals text character by character
+# Typewriter -- reveals text character by character
 gsap-cli text typewriter <target> "<text>" [--duration 2] [--ease none] [--cursor]
 
-# Scramble — reveals text through random characters
+# Scramble -- reveals text through random characters
 gsap-cli text scramble <target> "<text>" [--duration 1.5] [--chars "01!@#%"]
 ```
 
@@ -227,12 +278,18 @@ Common easing functions:
 - `elastic.out`, `bounce.out`, `back.out` (expressive)
 - `none` (linear)
 
+### Batch Mode
+Send multiple commands in a single IPC round-trip:
+```bash
+echo '<json-array>' | gsap-cli batch
+```
+See "Performance: Use Batch Mode" section above for details and examples.
+
 ### Pipe Mode
-For sending many commands efficiently:
+Stream JSON commands over a persistent connection (one per line, responses on stdout):
 ```bash
 gsap-cli pipe
 ```
-Reads JSON commands from stdin (one per line), writes responses to stdout.
 
 ### Screenshot
 Capture the current browser frame (requires Playwright):
@@ -242,49 +299,73 @@ gsap-cli screenshot --output /tmp/frame.png
 
 ## Patterns
 
-### Choreographed Intro Sequence
-Build the full scene first (all elements at opacity 0), then animate everything in with a timeline:
+### Batched Scene Setup
+The most efficient way to build a scene -- batch all element creation and initial property setup:
 
 ```bash
-# 1. Create all elements (invisible)
-gsap-cli element add bg --type rect --props '{"x":0,"y":0,"width":1200,"height":800,"fill":"#0a0a1a"}'
-gsap-cli element add title --type text --props '{"x":368,"y":260,"text":"GSAP CLI","fontSize":96,"fill":"#ffffff","opacity":0,"fontFamily":"monospace"}'
-gsap-cli element add subtitle --type text --props '{"x":312,"y":380,"text":"AI-Driven Animation Engine","fontSize":28,"fill":"#00ff88","opacity":0,"fontFamily":"monospace"}'
-gsap-cli element add accent-left --type rect --props '{"x":368,"y":305,"width":0,"height":3,"fill":"#ff0088"}'
-gsap-cli element add accent-right --type rect --props '{"x":832,"y":305,"width":0,"height":3,"fill":"#00aaff"}'
-gsap-cli element add orb1 --type circle --props '{"x":150,"y":300,"radius":12,"fill":"#ff0088","opacity":0}'
-gsap-cli element add orb2 --type circle --props '{"x":1050,"y":300,"radius":10,"fill":"#00aaff","opacity":0}'
-gsap-cli element add box1 --type rect --props '{"x":100,"y":520,"width":260,"height":130,"fill":"#1a1a3a","opacity":0,"borderRadius":12}'
-gsap-cli element add box2 --type rect --props '{"x":420,"y":520,"width":260,"height":130,"fill":"#1a1a3a","opacity":0,"borderRadius":12}'
-gsap-cli element add box3 --type rect --props '{"x":740,"y":520,"width":260,"height":130,"fill":"#1a1a3a","opacity":0,"borderRadius":12}'
-gsap-cli element add label1 --type text --props '{"x":165,"y":575,"text":"Timelines","fontSize":18,"fill":"#00ff88","opacity":0,"fontFamily":"monospace"}'
-gsap-cli element add label2 --type text --props '{"x":475,"y":575,"text":"Motion Paths","fontSize":18,"fill":"#00aaff","opacity":0,"fontFamily":"monospace"}'
-gsap-cli element add label3 --type text --props '{"x":810,"y":575,"text":"Camera FX","fontSize":18,"fill":"#ffaa00","opacity":0,"fontFamily":"monospace"}'
+echo '[
+  {"cmd":"element.add","id":"bg","type":"rect","props":{"x":0,"y":0,"width":1200,"height":700,"fill":"#0a0a1a"}},
+  {"cmd":"element.add","id":"title","type":"text","props":{"x":368,"y":260,"text":"GSAP CLI","fontSize":96,"fill":"#ffffff","opacity":0,"fontFamily":"monospace"}},
+  {"cmd":"element.add","id":"subtitle","type":"text","props":{"x":312,"y":380,"text":"AI-Driven Animation Engine","fontSize":28,"fill":"#00ff88","opacity":0,"fontFamily":"monospace"}},
+  {"cmd":"element.add","id":"box1","type":"rect","props":{"x":100,"y":520,"width":260,"height":130,"fill":"#1a1a3a","opacity":0,"borderRadius":12}},
+  {"cmd":"element.add","id":"box2","type":"rect","props":{"x":420,"y":520,"width":260,"height":130,"fill":"#1a1a3a","opacity":0,"borderRadius":12}},
+  {"cmd":"element.add","id":"box3","type":"rect","props":{"x":740,"y":520,"width":260,"height":130,"fill":"#1a1a3a","opacity":0,"borderRadius":12}}
+]' | gsap-cli batch
+```
 
-# 2. Choreograph with a timeline
+Then use individual commands for the timeline (since `--wait` needs sequential execution):
+```bash
 gsap-cli timeline create show --defaults '{"duration":0.8,"ease":"power3.out"}'
 gsap-cli timeline add show fromTo title --from-props '{"opacity":0,"y":290}' --props '{"opacity":1,"y":260}' --position "0"
-gsap-cli timeline add show to accent-left --props '{"width":250,"x":118}' --position "0.4"
-gsap-cli timeline add show to accent-right --props '{"width":250}' --position "0.4"
 gsap-cli timeline add show to subtitle --props '{"opacity":1}' --position "0.9"
-gsap-cli timeline add show fromTo orb1 --from-props '{"opacity":0,"scale":0}' --props '{"opacity":0.8,"scale":1}' --position "1.3"
-gsap-cli timeline add show fromTo orb2 --from-props '{"opacity":0,"scale":0}' --props '{"opacity":0.8,"scale":1}' --position "1.4"
 gsap-cli timeline add show fromTo box1 --from-props '{"opacity":0,"y":570}' --props '{"opacity":1,"y":520}' --position "1.8"
 gsap-cli timeline add show fromTo box2 --from-props '{"opacity":0,"y":570}' --props '{"opacity":1,"y":520}' --position "1.95"
 gsap-cli timeline add show fromTo box3 --from-props '{"opacity":0,"y":570}' --props '{"opacity":1,"y":520}' --position "2.1"
-gsap-cli timeline add show to label1 --props '{"opacity":1}' --position "2.2"
-gsap-cli timeline add show to label2 --props '{"opacity":1}' --position "2.35"
-gsap-cli timeline add show to label3 --props '{"opacity":1}' --position "2.5"
 gsap-cli timeline play show --wait
+```
 
-# 3. Add ambient looping animations after intro completes
-gsap-cli animate to orb1 --props '{"y":270,"x":170}' --duration 3 --ease "sine.inOut" --yoyo --repeat -1
-gsap-cli animate to orb2 --props '{"y":270,"x":1030}' --duration 4 --ease "sine.inOut" --yoyo --repeat -1
-gsap-cli animate to accent-left --props '{"opacity":0.4}' --duration 2 --ease "sine.inOut" --yoyo --repeat -1
-gsap-cli animate to accent-right --props '{"opacity":0.4}' --duration 2.5 --ease "sine.inOut" --yoyo --repeat -1
+You can also batch the timeline setup (create + add tweens) since those don't need `--wait`:
+```bash
+echo '[
+  {"cmd":"timeline.create","name":"show","defaults":{"duration":0.8,"ease":"power3.out"}},
+  {"cmd":"timeline.add","name":"show","tween_type":"fromTo","target":"title","from_props":{"opacity":0,"y":290},"props":{"opacity":1,"y":260},"position":"0"},
+  {"cmd":"timeline.add","name":"show","tween_type":"to","target":"subtitle","props":{"opacity":1},"position":"0.9"},
+  {"cmd":"timeline.add","name":"show","tween_type":"fromTo","target":"box1","from_props":{"opacity":0,"y":570},"props":{"opacity":1,"y":520},"position":"1.8"},
+  {"cmd":"timeline.add","name":"show","tween_type":"fromTo","target":"box2","from_props":{"opacity":0,"y":570},"props":{"opacity":1,"y":520},"position":"1.95"},
+  {"cmd":"timeline.add","name":"show","tween_type":"fromTo","target":"box3","from_props":{"opacity":0,"y":570},"props":{"opacity":1,"y":520},"position":"2.1"}
+]' | gsap-cli batch
 
-# 4. Text scramble effect
-gsap-cli text scramble subtitle "AI-Driven Animation Engine" --duration 2 --chars "01!@#%"
+gsap-cli timeline play show --wait
+```
+
+### Skeletal Animation with Joint Pivots
+Use nested groups for skeletal animation. Each limb is a group with `transformOrigin` at the joint pivot, and child limbs inherit the parent's rotation:
+
+```bash
+# Create skeleton hierarchy
+echo '[
+  {"cmd":"element.add","id":"runner","type":"group","props":{"x":400,"y":380}},
+  {"cmd":"element.add","id":"torso","type":"rect","parent":"runner","props":{"x":-10,"y":-75,"width":20,"height":65,"fill":"#4488dd","borderRadius":6}},
+  {"cmd":"element.add","id":"head","type":"circle","parent":"runner","props":{"x":0,"y":-108,"radius":18,"fill":"#ffcc66"}},
+  {"cmd":"element.add","id":"thigh-l","type":"group","parent":"runner","props":{"x":-8,"y":-12}},
+  {"cmd":"element.add","id":"thigh-l-vis","type":"rect","parent":"thigh-l","props":{"x":0,"y":0,"width":13,"height":45,"fill":"#335599","borderRadius":4}},
+  {"cmd":"element.add","id":"shin-l","type":"group","parent":"thigh-l","props":{"x":1,"y":42}},
+  {"cmd":"element.add","id":"shin-l-vis","type":"rect","parent":"shin-l","props":{"x":0,"y":0,"width":11,"height":42,"fill":"#2d4a80","borderRadius":4}}
+]' | gsap-cli batch
+
+# Set joint pivot points (must use gsap.set for transformOrigin)
+echo '[
+  {"cmd":"gsap.set","target":"thigh-l","props":{"transformOrigin":"6px 0px"}},
+  {"cmd":"gsap.set","target":"shin-l","props":{"transformOrigin":"5px 0px"}}
+]' | gsap-cli batch
+
+# Animate with rotation-based running cycle
+gsap-cli timeline create stride --defaults '{"duration":0.14,"ease":"power1.inOut"}' --repeat -1
+gsap-cli timeline add stride to thigh-l --props '{"rotation":-30}' --position "0"
+gsap-cli timeline add stride to shin-l --props '{"rotation":5}' --position "0"
+gsap-cli timeline add stride to thigh-l --props '{"rotation":35}' --position "0.14"
+gsap-cli timeline add stride to shin-l --props '{"rotation":-45}' --position "0.14"
+gsap-cli timeline play stride
 ```
 
 ### Ambient Looping Animations
@@ -296,10 +377,17 @@ gsap-cli animate to orb --props '{"y":270,"x":170}' --duration 3 --ease "sine.in
 # Pulsing opacity
 gsap-cli animate to glow --props '{"opacity":0.4}' --duration 2 --ease "sine.inOut" --yoyo --repeat -1
 
-# Staggered delay for multiple elements
-gsap-cli animate to orb1 --props '{"y":250}' --duration 3 --ease "sine.inOut" --yoyo --repeat -1
-gsap-cli animate to orb2 --props '{"y":250}' --duration 3 --ease "sine.inOut" --yoyo --repeat -1 --delay 0.5
-gsap-cli animate to orb3 --props '{"y":250}' --duration 3 --ease "sine.inOut" --yoyo --repeat -1 --delay 1
+# Kill a looping animation before replacing it
+gsap-cli animate-kill orb
+gsap-cli animate to orb --props '{"y":200}' --duration 1
+```
+
+### Cloning Elements
+Duplicate elements with optional property overrides:
+```bash
+gsap-cli element add star --type circle --props '{"x":100,"y":100,"radius":3,"fill":"#ffffff","opacity":0.6}'
+gsap-cli element clone star star2 --props '{"x":300,"y":150,"opacity":0.4}'
+gsap-cli element clone star star3 --props '{"x":600,"y":80,"opacity":0.7}'
 ```
 
 ### Fade In Narration Text
@@ -312,8 +400,7 @@ gsap-cli animate to narration --props '{"opacity":1}' --duration 1.5 --ease powe
 
 # Later, fade out and change
 sleep 3
-gsap-cli animate to narration --props '{"opacity":0}' --duration 1 --ease power2.in
-sleep 1.5
+gsap-cli animate to narration --props '{"opacity":0}' --duration 1 --ease power2.in --wait
 gsap-cli element set narration --props '{"text":"The end."}'
 gsap-cli animate to narration --props '{"opacity":1}' --duration 1.5 --ease power2.out
 ```
@@ -322,15 +409,12 @@ gsap-cli animate to narration --props '{"opacity":1}' --duration 1.5 --ease powe
 Create background elements first, foreground elements last. Elements render in creation order (z-order = creation order).
 
 ```bash
-# Background
-gsap-cli element add sky --type rect --props '{"x":0,"y":0,"width":1200,"height":700,"fill":"#0a0a2e"}'
-gsap-cli element add ground --type rect --props '{"x":0,"y":500,"width":1200,"height":200,"fill":"#1a1a3e"}'
-
-# Midground
-gsap-cli element add building --type rect --props '{"x":200,"y":300,"width":80,"height":200,"fill":"#151530"}'
-
-# Foreground
-gsap-cli element add hero --type circle --props '{"x":100,"y":450,"radius":20,"fill":"#ffcc00"}'
+echo '[
+  {"cmd":"element.add","id":"sky","type":"rect","props":{"x":0,"y":0,"width":1200,"height":700,"fill":"#0a0a2e"}},
+  {"cmd":"element.add","id":"ground","type":"rect","props":{"x":0,"y":500,"width":1200,"height":200,"fill":"#1a1a3e"}},
+  {"cmd":"element.add","id":"building","type":"rect","props":{"x":200,"y":300,"width":80,"height":200,"fill":"#151530"}},
+  {"cmd":"element.add","id":"hero","type":"circle","props":{"x":100,"y":450,"radius":20,"fill":"#ffcc00"}}
+]' | gsap-cli batch
 ```
 
 ### Camera Cinematic Effects
@@ -368,20 +452,26 @@ gsap-cli animate to hero --props '{"y":200}' --duration 1 --wait
 
 ### Positioning is top-left origin
 ALL elements (rect, text, circle, image, group, html) are positioned by their **top-left corner** via CSS `translate(x, y)`. There is no auto-centering. To visually center text, estimate the text width and offset `x` accordingly:
-- Monospace font: ~0.6 × fontSize per character
-- Example: "GSAP CLI" (8 chars) at fontSize 96 ≈ 461px wide → to center at x=600, use `x = 600 - 230 = 370`
+- Monospace font: ~0.6 x fontSize per character
+- Example: "GSAP CLI" (8 chars) at fontSize 96 ~ 461px wide -> to center at x=600, use `x = 600 - 230 = 370`
 
 ### Circles use `radius`, not `width`/`height`
 ```bash
-# WRONG — will be ignored
+# WRONG -- will be ignored
 gsap-cli element add dot --type circle --props '{"x":100,"y":100,"width":40,"height":40}'
 
 # CORRECT
 gsap-cli element add dot --type circle --props '{"x":100,"y":100,"radius":20}'
 ```
 
+### `element set` vs `gsap-cli set`
+- `element set` -- updates non-transform props (x, y, fill, text, opacity, width, height)
+- `gsap-cli set` -- sets ANY GSAP property including transforms (rotation, scale, transformOrigin)
+
+Use `gsap-cli set` when you need rotation, scale, or transformOrigin. Use `element set` for changing text content, colors, or dimensions.
+
 ### Negative numbers in flags
-The `--repeat` flag accepts negative values directly — both forms work:
+The `--repeat` flag accepts negative values directly -- both forms work:
 ```bash
 gsap-cli animate to box --props '{"y":100}' --repeat -1
 gsap-cli animate to box --props '{"y":100}' --repeat=-1
@@ -398,23 +488,27 @@ gsap-cli element add line1 --type line --props '{"x1":0,"y1":100,"x2":500,"y2":1
 ```
 
 ### `fill` maps to different CSS props by type
-- `rect` / `circle` → `backgroundColor`
-- `text` → `color`
-- `line` / `path` → uses SVG `fill` attribute (for paths; lines use `stroke`)
+- `rect` / `circle` -> `backgroundColor`
+- `text` -> `color`
+- `line` / `path` -> uses SVG `fill` attribute (for paths; lines use `stroke`)
 
 ### Colors must be hex format
 Use `"#ff6b6b"`, not CSS names like `"red"` or `"tomato"`.
 
 ### Browser viewport size varies
-The browser canvas size depends on the user's browser window. Design for ~1200×700 as a baseline, but don't assume exact dimensions.
+The browser canvas size depends on the user's browser window. Design for ~1200x700 as a baseline, but don't assume exact dimensions.
 
 ## Tips
 
 - Always run `gsap-cli status` first to verify the daemon is connected
+- **Batch element creation** -- use `gsap-cli batch` for 3+ elements to avoid per-command IPC overhead
 - Use single quotes around JSON props to avoid shell escaping issues
-- Build the full scene first (elements at opacity 0), then animate them in — this prevents visual pop-in
+- Build the full scene first (elements at opacity 0), then animate them in -- this prevents visual pop-in
 - Use `--wait` on `timeline play` to block until animations complete before starting the next phase
 - Use `fromTo` when you need precise control over both start and end states
 - Overlap timeline tweens with position `"<0.2"` for polished, staggered entrances
 - `sine.inOut` is the best ease for looping/ambient animations
-- For batch element creation, run multiple commands in a single Bash call separated by newlines
+- Use `gsap-cli animate-kill` before replacing a looping animation on the same target
+- Use `gsap-cli clear` to reset the scene between demos
+- Use `element clone` to duplicate elements instead of re-specifying all props
+- Use `gsap-cli set` (not `element set`) for transform properties like `transformOrigin` and `rotation`

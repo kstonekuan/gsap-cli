@@ -1,6 +1,9 @@
 pub mod animate;
+pub mod batch;
 pub mod camera;
+pub mod clear;
 pub mod element;
+pub mod gsap_set;
 pub mod pipe;
 pub mod screenshot;
 pub mod status;

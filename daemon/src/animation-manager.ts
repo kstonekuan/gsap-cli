@@ -5,13 +5,44 @@ import type { Scene } from "./scene.js";
 let tweenCounter = 0;
 let timelineCounter = 0;
 
+/**
+ * CSS transform properties that require GSAP's CSSPlugin (DOM elements).
+ * The daemon animates plain objects for timing/completion tracking only —
+ * these props are meaningless on plain objects and trigger GSAP warnings.
+ * The browser renderer handles them natively.
+ */
+const CSS_TRANSFORM_PROPS = new Set([
+	"rotation",
+	"scale",
+	"scaleX",
+	"scaleY",
+	"skewX",
+	"skewY",
+	"transformOrigin",
+	"xPercent",
+	"yPercent",
+	"motionPath",
+]);
+
+function stripCssTransformProps(
+	props: Record<string, unknown>,
+): Record<string, unknown> {
+	const result: Record<string, unknown> = {};
+	for (const [key, value] of Object.entries(props)) {
+		if (!CSS_TRANSFORM_PROPS.has(key)) {
+			result[key] = value;
+		}
+	}
+	return result;
+}
+
 function buildTweenVars(
 	props: Record<string, unknown>,
 	controls: AnimationControlFields,
 	onComplete: () => void,
 ): gsap.TweenVars {
 	return {
-		...structuredClone(props),
+		...structuredClone(stripCssTransformProps(props)),
 		duration: controls.duration ?? 1,
 		ease: controls.ease ?? "power2.out",
 		stagger: controls.stagger ?? 0,
@@ -92,7 +123,7 @@ export class AnimationManager {
 		const id = `tween_${++tweenCounter}`;
 		const tween = gsap.fromTo(
 			targets,
-			structuredClone(fromProps),
+			structuredClone(stripCssTransformProps(fromProps)),
 			buildTweenVars(toProps, controls, () => {
 				this.activeTweens.delete(id);
 			}),
@@ -101,7 +132,12 @@ export class AnimationManager {
 		return id;
 	}
 
-	createTimeline(name: string, defaults?: Record<string, unknown>): string {
+	createTimeline(
+		name: string,
+		defaults?: Record<string, unknown>,
+		repeat?: number,
+		yoyo?: boolean,
+	): string {
 		if (this.timelines.has(name)) {
 			throw new Error(`Timeline "${name}" already exists`);
 		}
@@ -109,6 +145,8 @@ export class AnimationManager {
 		const timeline = gsap.timeline({
 			paused: true,
 			defaults: defaults ?? {},
+			...(repeat !== undefined && { repeat }),
+			...(yoyo !== undefined && { yoyo }),
 		});
 		this.timelines.set(name, timeline);
 		return id;
@@ -121,34 +159,58 @@ export class AnimationManager {
 		props: Record<string, unknown>,
 		fromProps?: Record<string, unknown>,
 		position?: string,
+		stagger?: number,
 	): string {
 		const timeline = this.timelines.get(name);
 		if (!timeline) {
 			throw new Error(`Timeline "${name}" not found`);
 		}
-		const element = this.scene.get(target);
-		if (!element) {
-			throw new Error(`Element "${target}" not found`);
+		const elements = this.scene.getByTarget(target);
+		if (elements.length === 0) {
+			throw new Error(`No elements found for target "${target}"`);
 		}
+		const tweenTargets =
+			elements.length === 1
+				? // biome-ignore lint: length check guarantees element exists
+					elements[0]!.props
+				: elements.map((e) => e.props);
 
 		const id = `tween_${++tweenCounter}`;
 		const positionParam = position ?? "+=0";
+		const staggerOpt = stagger !== undefined ? { stagger } : {};
 
 		switch (tweenType) {
 			case "to":
-				timeline.to(element.props, structuredClone(props), positionParam);
+				timeline.to(
+					tweenTargets,
+					{
+						...structuredClone(stripCssTransformProps(props)),
+						...staggerOpt,
+					},
+					positionParam,
+				);
 				break;
 			case "from":
-				timeline.from(element.props, structuredClone(props), positionParam);
+				timeline.from(
+					tweenTargets,
+					{
+						...structuredClone(stripCssTransformProps(props)),
+						...staggerOpt,
+					},
+					positionParam,
+				);
 				break;
 			case "fromTo": {
 				if (!fromProps) {
 					throw new Error("fromTo requires from_props to be specified");
 				}
 				timeline.fromTo(
-					element.props,
-					structuredClone(fromProps),
-					structuredClone(props),
+					tweenTargets,
+					structuredClone(stripCssTransformProps(fromProps)),
+					{
+						...structuredClone(stripCssTransformProps(props)),
+						...staggerOpt,
+					},
 					positionParam,
 				);
 				break;
@@ -292,6 +354,32 @@ export class AnimationManager {
 			return { active: false, progress: 1 };
 		}
 		return { active: tween.isActive(), progress: tween.progress() };
+	}
+
+	killTarget(target: string): void {
+		const elements = this.scene.getByTarget(target);
+		const propSets = new Set(elements.map((e) => e.props));
+		for (const [id, tween] of this.activeTweens) {
+			const tweenTargets = tween.targets();
+			for (const t of tweenTargets) {
+				if (propSets.has(t as Record<string, unknown>)) {
+					tween.kill();
+					this.activeTweens.delete(id);
+					break;
+				}
+			}
+		}
+	}
+
+	killAll(): void {
+		for (const tween of this.activeTweens.values()) {
+			tween.kill();
+		}
+		this.activeTweens.clear();
+		for (const timeline of this.timelines.values()) {
+			timeline.kill();
+		}
+		this.timelines.clear();
 	}
 
 	activeTweenCount(): number {

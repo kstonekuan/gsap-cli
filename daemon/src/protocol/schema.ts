@@ -13,8 +13,17 @@ const elementTypeSchema = z.enum([
 	"path",
 ]);
 
+const batchCommandSchema = z.object({
+	cmd: z.literal("batch"),
+	commands: z.array(z.record(z.string(), z.unknown())),
+});
+
 const statusCommandSchema = z.object({
 	cmd: z.literal("status"),
+});
+
+const sceneClearCommandSchema = z.object({
+	cmd: z.literal("scene.clear"),
 });
 
 const elementAddCommandSchema = z.object({
@@ -34,6 +43,28 @@ const elementSetCommandSchema = z.object({
 	cmd: z.literal("element.set"),
 	id: z.string(),
 	props: propsSchema,
+});
+
+const elementListCommandSchema = z.object({
+	cmd: z.literal("element.list"),
+});
+
+const elementCloneCommandSchema = z.object({
+	cmd: z.literal("element.clone"),
+	source: z.string(),
+	id: z.string(),
+	props: propsSchema.optional(),
+});
+
+const gsapSetCommandSchema = z.object({
+	cmd: z.literal("gsap.set"),
+	target: z.string(),
+	props: propsSchema,
+});
+
+const animateKillCommandSchema = z.object({
+	cmd: z.literal("animate.kill"),
+	target: z.string(),
 });
 
 const animationControlSchema = {
@@ -73,6 +104,8 @@ const timelineCreateCommandSchema = z.object({
 	cmd: z.literal("timeline.create"),
 	name: z.string(),
 	defaults: propsSchema.optional(),
+	repeat: z.number().optional(),
+	yoyo: z.boolean().optional(),
 });
 
 const timelineAddCommandSchema = z.object({
@@ -83,6 +116,7 @@ const timelineAddCommandSchema = z.object({
 	props: propsSchema,
 	from_props: propsSchema.optional(),
 	position: z.string().optional(),
+	stagger: z.number().optional(),
 });
 
 const animateStatusCommandSchema = z.object({
@@ -174,10 +208,16 @@ const screenshotCommandSchema = z.object({
 });
 
 export const commandSchema = z.discriminatedUnion("cmd", [
+	batchCommandSchema,
 	statusCommandSchema,
+	sceneClearCommandSchema,
 	elementAddCommandSchema,
 	elementRemoveCommandSchema,
 	elementSetCommandSchema,
+	elementListCommandSchema,
+	elementCloneCommandSchema,
+	gsapSetCommandSchema,
+	animateKillCommandSchema,
 	animateToCommandSchema,
 	animateFromCommandSchema,
 	animateFromToCommandSchema,

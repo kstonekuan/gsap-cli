@@ -43,6 +43,15 @@ export async function handleCommand(
 
 	try {
 		switch (command.cmd) {
+			case "batch": {
+				const results: Response[] = [];
+				for (const subCommand of command.commands) {
+					const result = await handleCommand(subCommand, context);
+					results.push(result);
+				}
+				return { ok: true, results };
+			}
+
 			case "status":
 				return {
 					ok: true,
@@ -51,6 +60,14 @@ export async function handleCommand(
 					timelines: context.animationManager.timelineCount(),
 					uptime: (Date.now() - context.startTime) / 1000,
 				};
+
+			case "scene.clear": {
+				context.animationManager.killAll();
+				context.scene.clear();
+				context.renderer.forwardCommand(command);
+				context.renderer.onSceneChange(context.scene);
+				return { ok: true };
+			}
 
 			case "element.add": {
 				context.scene.add(
@@ -75,6 +92,41 @@ export async function handleCommand(
 				context.scene.set(command.id, command.props);
 				context.renderer.forwardCommand(command);
 				context.renderer.onSceneChange(context.scene);
+				return { ok: true };
+			}
+
+			case "element.list": {
+				return {
+					ok: true,
+					list: context.scene.getAllSerializable(),
+				};
+			}
+
+			case "element.clone": {
+				const cloned = context.scene.clone(
+					command.source,
+					command.id,
+					command.props,
+				);
+				context.renderer.forwardCommand({
+					cmd: "element.add",
+					id: cloned.id,
+					type: cloned.type,
+					parent: cloned.parent,
+					props: cloned.props,
+				});
+				context.renderer.onSceneChange(context.scene);
+				return { ok: true, id: command.id };
+			}
+
+			case "gsap.set": {
+				context.renderer.forwardCommand(command);
+				return { ok: true };
+			}
+
+			case "animate.kill": {
+				context.animationManager.killTarget(command.target);
+				context.renderer.forwardCommand(command);
 				return { ok: true };
 			}
 
@@ -155,6 +207,8 @@ export async function handleCommand(
 				const id = context.animationManager.createTimeline(
 					command.name,
 					command.defaults,
+					command.repeat,
+					command.yoyo,
 				);
 				context.renderer.forwardCommand(command);
 				return { ok: true, id };
@@ -168,6 +222,7 @@ export async function handleCommand(
 					command.props,
 					command.from_props,
 					command.position,
+					command.stagger,
 				);
 				context.renderer.forwardCommand(command);
 				return { ok: true, id };

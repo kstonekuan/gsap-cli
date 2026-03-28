@@ -57,7 +57,14 @@ pub struct AnimationControls {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "cmd", rename_all = "snake_case")]
 pub enum Command {
+    Batch {
+        commands: Vec<Value>,
+    },
+
     Status,
+
+    #[serde(rename = "scene.clear")]
+    SceneClear,
 
     #[serde(rename = "element.add")]
     ElementAdd {
@@ -79,6 +86,28 @@ pub enum Command {
     ElementSet {
         id: String,
         props: Value,
+    },
+
+    #[serde(rename = "element.list")]
+    ElementList,
+
+    #[serde(rename = "element.clone")]
+    ElementClone {
+        source: String,
+        id: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        props: Option<Value>,
+    },
+
+    #[serde(rename = "gsap.set")]
+    GsapSet {
+        target: String,
+        props: Value,
+    },
+
+    #[serde(rename = "animate.kill")]
+    AnimateKill {
+        target: String,
     },
 
     #[serde(rename = "animate.to")]
@@ -132,6 +161,10 @@ pub enum Command {
         name: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         defaults: Option<Value>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        repeat: Option<f64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        yoyo: Option<bool>,
     },
 
     #[serde(rename = "timeline.add")]
@@ -144,6 +177,8 @@ pub enum Command {
         from_props: Option<Value>,
         #[serde(skip_serializing_if = "Option::is_none")]
         position: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        stagger: Option<f64>,
     },
 
     #[serde(rename = "timeline.play")]

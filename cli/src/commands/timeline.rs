@@ -2,14 +2,19 @@ use serde_json::Value;
 
 use crate::protocol::{Command, TweenType, flag_to_option, send_and_print};
 
-pub fn create(name: String, defaults: Option<String>) {
+pub fn create(name: String, defaults: Option<String>, repeat: Option<f64>, yoyo: bool) {
     let defaults: Option<Value> = defaults.map(|d| {
         serde_json::from_str(&d).unwrap_or_else(|e| {
             eprintln!("Invalid JSON for --defaults: {e}");
             std::process::exit(1);
         })
     });
-    send_and_print(&Command::TimelineCreate { name, defaults });
+    send_and_print(&Command::TimelineCreate {
+        name,
+        defaults,
+        repeat,
+        yoyo: flag_to_option(yoyo),
+    });
 }
 
 pub fn add(
@@ -19,6 +24,7 @@ pub fn add(
     props: String,
     from_props: Option<String>,
     position: Option<String>,
+    stagger: Option<f64>,
 ) {
     let tween_type = TweenType::parse(&tween_type).unwrap_or_else(|e| {
         eprintln!("{e}");
@@ -41,6 +47,7 @@ pub fn add(
         props,
         from_props,
         position,
+        stagger,
     });
 }
 
