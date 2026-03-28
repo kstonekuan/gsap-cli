@@ -14,23 +14,23 @@ export interface SerializableSceneElement {
 	props: Record<string, unknown>;
 }
 
-/** Strip GSAP internal keys (prefixed with _) from props so the element is JSON-serializable */
+/** Strip GSAP internal keys (prefixed with _) from props so the element is JSON-serializable.
+ *  Props are user-set primitives (string, number, boolean, null) — no need for
+ *  expensive JSON.stringify checks. */
 function toSerializableElement(
 	element: SceneElement,
 ): SerializableSceneElement {
 	const cleanProps: Record<string, unknown> = {};
 	for (const [key, value] of Object.entries(element.props)) {
-		if (!key.startsWith("_") && typeof value !== "object") {
+		if (key.startsWith("_")) continue;
+		const valueType = typeof value;
+		if (
+			value === null ||
+			valueType === "string" ||
+			valueType === "number" ||
+			valueType === "boolean"
+		) {
 			cleanProps[key] = value;
-		} else if (!key.startsWith("_") && value === null) {
-			cleanProps[key] = value;
-		} else if (!key.startsWith("_")) {
-			try {
-				JSON.stringify(value);
-				cleanProps[key] = value;
-			} catch {
-				// Non-serializable — skip
-			}
 		}
 	}
 	const result: SerializableSceneElement = {

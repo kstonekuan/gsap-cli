@@ -23,7 +23,7 @@ export class BrowserRenderer implements Renderer {
 	private port: number;
 	private server: Server<undefined> | null = null;
 	private clients = new Set<ServerWebSocket<undefined>>();
-	private pendingCommands: unknown[] = [];
+	private lastScene: Scene | null = null;
 
 	constructor(port = 3000) {
 		this.port = port;
@@ -65,9 +65,14 @@ export class BrowserRenderer implements Renderer {
 						`[browser renderer] Client connected (total: ${renderer.clients.size})`,
 					);
 
-					// Send any pending commands to new client
-					for (const cmd of renderer.pendingCommands) {
-						ws.send(JSON.stringify(cmd));
+					// Send current scene state so the new client renders the existing scene
+					if (renderer.lastScene) {
+						ws.send(
+							JSON.stringify({
+								type: "scene.sync",
+								elements: renderer.lastScene.getAllSerializable(),
+							}),
+						);
 					}
 				},
 				close(ws) {
@@ -97,6 +102,7 @@ export class BrowserRenderer implements Renderer {
 	}
 
 	onSceneChange(scene: Scene): void {
+		this.lastScene = scene;
 		const syncCommand = {
 			type: "scene.sync",
 			elements: scene.getAllSerializable(),
@@ -104,12 +110,12 @@ export class BrowserRenderer implements Renderer {
 		this.broadcast(syncCommand);
 	}
 
-	onTick(scene: Scene): void {
-		const tickCommand = {
-			type: "scene.tick",
-			elements: scene.getAllSerializable(),
-		};
-		this.broadcast(tickCommand);
+	onTick(_scene: Scene): void {
+		// In browser mode, GSAP runs natively in the browser and is the source
+		// of truth for animated values. Sending daemon-side scene graph data
+		// on every tick would overwrite the browser's GSAP transforms, causing
+		// animations to fight and stutter. Only scene.sync (via onSceneChange)
+		// is sent — for structural changes like element add/remove/set.
 	}
 
 	/** Forward a raw command to browser clients for native GSAP execution */
@@ -118,7 +124,6 @@ export class BrowserRenderer implements Renderer {
 			type: "command",
 			command,
 		};
-		this.pendingCommands.push(forwardMessage);
 		this.broadcast(forwardMessage);
 	}
 

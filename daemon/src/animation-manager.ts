@@ -5,13 +5,43 @@ import type { Scene } from "./scene.js";
 let tweenCounter = 0;
 let timelineCounter = 0;
 
+/**
+ * Properties that GSAP treats as CSS transforms requiring CSSPlugin/DOM.
+ * On the daemon side we animate plain objects, so these must be stripped
+ * to avoid "Invalid property … Missing plugin?" warnings.
+ * The browser renderer handles them natively via GSAP's CSSPlugin.
+ */
+const BROWSER_ONLY_PROPS = new Set([
+	"scale",
+	"scaleX",
+	"scaleY",
+	"skewX",
+	"skewY",
+	"transformOrigin",
+	"xPercent",
+	"yPercent",
+	"motionPath",
+]);
+
+function stripBrowserOnlyProps(
+	props: Record<string, unknown>,
+): Record<string, unknown> {
+	const result: Record<string, unknown> = {};
+	for (const [key, value] of Object.entries(props)) {
+		if (!BROWSER_ONLY_PROPS.has(key)) {
+			result[key] = value;
+		}
+	}
+	return result;
+}
+
 function buildTweenVars(
 	props: Record<string, unknown>,
 	controls: AnimationControlFields,
 	onComplete: () => void,
 ): gsap.TweenVars {
 	return {
-		...structuredClone(props),
+		...structuredClone(stripBrowserOnlyProps(props)),
 		duration: controls.duration ?? 1,
 		ease: controls.ease ?? "power2.out",
 		stagger: controls.stagger ?? 0,
@@ -92,7 +122,7 @@ export class AnimationManager {
 		const id = `tween_${++tweenCounter}`;
 		const tween = gsap.fromTo(
 			targets,
-			structuredClone(fromProps),
+			structuredClone(stripBrowserOnlyProps(fromProps)),
 			buildTweenVars(toProps, controls, () => {
 				this.activeTweens.delete(id);
 			}),
@@ -136,10 +166,18 @@ export class AnimationManager {
 
 		switch (tweenType) {
 			case "to":
-				timeline.to(element.props, structuredClone(props), positionParam);
+				timeline.to(
+					element.props,
+					structuredClone(stripBrowserOnlyProps(props)),
+					positionParam,
+				);
 				break;
 			case "from":
-				timeline.from(element.props, structuredClone(props), positionParam);
+				timeline.from(
+					element.props,
+					structuredClone(stripBrowserOnlyProps(props)),
+					positionParam,
+				);
 				break;
 			case "fromTo": {
 				if (!fromProps) {
@@ -147,8 +185,8 @@ export class AnimationManager {
 				}
 				timeline.fromTo(
 					element.props,
-					structuredClone(fromProps),
-					structuredClone(props),
+					structuredClone(stripBrowserOnlyProps(fromProps)),
+					structuredClone(stripBrowserOnlyProps(props)),
 					positionParam,
 				);
 				break;

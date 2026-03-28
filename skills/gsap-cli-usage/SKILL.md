@@ -102,7 +102,7 @@ These properties can be animated with `gsap-cli animate` or timeline tweens:
 | `x` | Horizontal position (px) | Transform-based, smooth |
 | `y` | Vertical position (px) | Transform-based, smooth |
 | `rotation` | Rotation in degrees | e.g., 360 for full spin |
-| `scale` | Uniform scale factor | Browser mode only |
+| `scale` | Uniform scale factor | Browser mode only; stripped on daemon side |
 | `opacity` | Transparency (0-1) | Great for fade in/out |
 | `width` | Element width (px) | Rect/image/html only |
 | `height` | Element height (px) | Rect/image/html only |

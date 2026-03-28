@@ -65,22 +65,31 @@ export async function handleCommand(
 					command.props,
 					command.parent,
 				);
-				context.renderer.onSceneChange(context.scene);
-				context.renderer.forwardCommand?.(command);
+				if (context.renderer.forwardCommand) {
+					context.renderer.forwardCommand(command);
+				} else {
+					context.renderer.onSceneChange(context.scene);
+				}
 				return { ok: true, id: command.id };
 			}
 
 			case "element.remove": {
 				context.scene.remove(command.id);
-				context.renderer.onSceneChange(context.scene);
-				context.renderer.forwardCommand?.(command);
+				if (context.renderer.forwardCommand) {
+					context.renderer.forwardCommand(command);
+				} else {
+					context.renderer.onSceneChange(context.scene);
+				}
 				return { ok: true };
 			}
 
 			case "element.set": {
 				context.scene.set(command.id, command.props);
-				context.renderer.onSceneChange(context.scene);
-				context.renderer.forwardCommand?.(command);
+				if (context.renderer.forwardCommand) {
+					context.renderer.forwardCommand(command);
+				} else {
+					context.renderer.onSceneChange(context.scene);
+				}
 				return { ok: true };
 			}
 

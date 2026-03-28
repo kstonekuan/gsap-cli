@@ -49,7 +49,7 @@ enum CliCommand {
         stagger: Option<f64>,
 
         /// Number of times to repeat (-1 for infinite)
-        #[arg(long)]
+        #[arg(long, allow_hyphen_values = true)]
         repeat: Option<i32>,
 
         /// Reverse on alternate repeats
@@ -99,7 +99,7 @@ enum CliCommand {
         ease: Option<String>,
 
         /// Number of times to repeat (-1 for infinite)
-        #[arg(long)]
+        #[arg(long, allow_hyphen_values = true)]
         repeat: Option<i32>,
 
         /// Reverse on alternate repeats
