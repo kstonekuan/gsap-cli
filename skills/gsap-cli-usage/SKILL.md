@@ -145,7 +145,7 @@ Target can be: a single element ID, comma-separated IDs (`box1,box2,box3`), or `
 
 Additional animate flags:
 - `--stagger <seconds>` — delay between each element when targeting multiple
-- `--repeat <n>` — repeat count (**use `--repeat=-1` for infinite**, not `--repeat -1`)
+- `--repeat <n>` — repeat count (`--repeat -1` for infinite)
 - `--yoyo` — reverse on alternate repeats (great with `--repeat`)
 - `--delay <seconds>` — delay before starting
 - `--repeat-delay <seconds>` — delay between repeats
@@ -153,10 +153,18 @@ Additional animate flags:
 
 Defaults: duration=1 second, ease="power2.out"
 
-### Motion Path
-Animate an element along an SVG path:
+### Animation Status
+Query the state of an active tween:
 ```bash
-gsap-cli animate motion-path <target> --path "M0,0 C100,-100 200,100 300,0" [--auto-rotate] [--duration 2] [--ease power2.inOut]
+gsap-cli animate-status <tween-id>
+```
+
+### Motion Path
+Animate an element along an SVG path (top-level command, not under `animate`):
+```bash
+gsap-cli motion-path <target> --path "M0,0 C100,-100 200,100 300,0" \
+  [--auto-rotate] [--duration 2] [--ease power2.inOut] \
+  [--repeat -1] [--yoyo] [--delay 0] [--wait]
 ```
 
 ### Timelines
@@ -207,7 +215,7 @@ Pan, zoom, and rotate the entire scene:
 gsap-cli camera set [--x 100] [--y 50] [--zoom 1.5] [--rotation 5]
 
 # Animate camera smoothly
-gsap-cli camera animate [--x 100] [--y 50] [--zoom 1.5] [--rotation 5] [--duration 2] [--ease power2.inOut]
+gsap-cli camera animate [--x 100] [--y 50] [--zoom 1.5] [--rotation 5] [--duration 2] [--ease power2.inOut] [--wait]
 ```
 
 ### GSAP Easing
@@ -270,28 +278,28 @@ gsap-cli timeline add show to label3 --props '{"opacity":1}' --position "2.5"
 gsap-cli timeline play show --wait
 
 # 3. Add ambient looping animations after intro completes
-gsap-cli animate to orb1 --props '{"y":270,"x":170}' --duration 3 --ease "sine.inOut" --yoyo --repeat=-1
-gsap-cli animate to orb2 --props '{"y":270,"x":1030}' --duration 4 --ease "sine.inOut" --yoyo --repeat=-1
-gsap-cli animate to accent-left --props '{"opacity":0.4}' --duration 2 --ease "sine.inOut" --yoyo --repeat=-1
-gsap-cli animate to accent-right --props '{"opacity":0.4}' --duration 2.5 --ease "sine.inOut" --yoyo --repeat=-1
+gsap-cli animate to orb1 --props '{"y":270,"x":170}' --duration 3 --ease "sine.inOut" --yoyo --repeat -1
+gsap-cli animate to orb2 --props '{"y":270,"x":1030}' --duration 4 --ease "sine.inOut" --yoyo --repeat -1
+gsap-cli animate to accent-left --props '{"opacity":0.4}' --duration 2 --ease "sine.inOut" --yoyo --repeat -1
+gsap-cli animate to accent-right --props '{"opacity":0.4}' --duration 2.5 --ease "sine.inOut" --yoyo --repeat -1
 
 # 4. Text scramble effect
 gsap-cli text scramble subtitle "AI-Driven Animation Engine" --duration 2 --chars "01!@#%"
 ```
 
 ### Ambient Looping Animations
-Use `--yoyo --repeat=-1` with `sine.inOut` for smooth floating/pulsing:
+Use `--yoyo --repeat -1` with `sine.inOut` for smooth floating/pulsing:
 ```bash
 # Floating element
-gsap-cli animate to orb --props '{"y":270,"x":170}' --duration 3 --ease "sine.inOut" --yoyo --repeat=-1
+gsap-cli animate to orb --props '{"y":270,"x":170}' --duration 3 --ease "sine.inOut" --yoyo --repeat -1
 
 # Pulsing opacity
-gsap-cli animate to glow --props '{"opacity":0.4}' --duration 2 --ease "sine.inOut" --yoyo --repeat=-1
+gsap-cli animate to glow --props '{"opacity":0.4}' --duration 2 --ease "sine.inOut" --yoyo --repeat -1
 
 # Staggered delay for multiple elements
-gsap-cli animate to orb1 --props '{"y":250}' --duration 3 --ease "sine.inOut" --yoyo --repeat=-1
-gsap-cli animate to orb2 --props '{"y":250}' --duration 3 --ease "sine.inOut" --yoyo --repeat=-1 --delay 0.5
-gsap-cli animate to orb3 --props '{"y":250}' --duration 3 --ease "sine.inOut" --yoyo --repeat=-1 --delay 1
+gsap-cli animate to orb1 --props '{"y":250}' --duration 3 --ease "sine.inOut" --yoyo --repeat -1
+gsap-cli animate to orb2 --props '{"y":250}' --duration 3 --ease "sine.inOut" --yoyo --repeat -1 --delay 0.5
+gsap-cli animate to orb3 --props '{"y":250}' --duration 3 --ease "sine.inOut" --yoyo --repeat -1 --delay 1
 ```
 
 ### Fade In Narration Text
@@ -372,13 +380,10 @@ gsap-cli element add dot --type circle --props '{"x":100,"y":100,"width":40,"hei
 gsap-cli element add dot --type circle --props '{"x":100,"y":100,"radius":20}'
 ```
 
-### Negative numbers in flags need `=` syntax
-Clap (the CLI parser) interprets `-1` as a flag, not a value. Use `=` to attach the value:
+### Negative numbers in flags
+The `--repeat` flag accepts negative values directly — both forms work:
 ```bash
-# WRONG — clap error: "unexpected argument '-1' found"
 gsap-cli animate to box --props '{"y":100}' --repeat -1
-
-# CORRECT
 gsap-cli animate to box --props '{"y":100}' --repeat=-1
 ```
 

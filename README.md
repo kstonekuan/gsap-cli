@@ -65,7 +65,7 @@ gsap-cli status
 ### Elements
 
 ```bash
-gsap-cli element add <id> --type rect|circle|text [--props '{}']
+gsap-cli element add <id> --type rect|circle|text|line|path|image|html|group [--parent <group-id>] [--props '{}']
 gsap-cli element remove <id>
 gsap-cli element set <id> --props '{}'
 ```
@@ -73,15 +73,53 @@ gsap-cli element set <id> --props '{}'
 ### Animation
 
 ```bash
-gsap-cli animate to|from|fromTo <target> --props '{}' [--duration 1] [--ease power2.out]
+gsap-cli animate to|from|fromTo <target> --props '{}' [--from-props '{}'] \
+  [--duration 1] [--ease power2.out] [--stagger 0.1] \
+  [--repeat -1] [--yoyo] [--delay 0] [--repeat-delay 0] [--wait]
+```
+
+Target can be a single ID, comma-separated IDs (`box1,box2`), or `*` for all elements.
+
+### Animation Status
+
+```bash
+gsap-cli animate-status <tween-id>
+```
+
+### Motion Path
+
+Animate an element along an SVG path:
+
+```bash
+gsap-cli motion-path <target> --path "M0,0 C100,-100 200,100 300,0" \
+  [--auto-rotate] [--duration 2] [--ease power2.inOut] \
+  [--repeat -1] [--yoyo] [--delay 0] [--wait]
 ```
 
 ### Timelines
 
 ```bash
 gsap-cli timeline create <name> [--defaults '{}']
-gsap-cli timeline add <name> <tween-type> <target> --props '{}' [--position "<"]
-gsap-cli timeline play|pause|reverse|seek <name>
+gsap-cli timeline add <name> to|from|fromTo <target> --props '{}' [--from-props '{}'] [--position "<"]
+gsap-cli timeline play <name> [--wait]
+gsap-cli timeline pause <name>
+gsap-cli timeline reverse <name>
+gsap-cli timeline seek <name> <position>
+gsap-cli timeline label <name> <label> [--position "<"]
+```
+
+### Text Effects
+
+```bash
+gsap-cli text typewriter <target> "<text>" [--duration 2] [--ease none] [--cursor] [--wait]
+gsap-cli text scramble <target> "<text>" [--duration 1.5] [--chars "01!@#%"] [--wait]
+```
+
+### Camera Control
+
+```bash
+gsap-cli camera set [--x 100] [--y 50] [--zoom 1.5] [--rotation 5]
+gsap-cli camera animate [--x 100] [--y 50] [--zoom 1.5] [--rotation 5] [--duration 2] [--ease power2.inOut] [--wait]
 ```
 
 ### Pipe Mode
