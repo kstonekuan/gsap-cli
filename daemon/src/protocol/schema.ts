@@ -212,6 +212,37 @@ const screenshotCommandSchema = z.object({
 	output: z.string(),
 });
 
+const layoutAlignCommandSchema = z.object({
+	cmd: z.literal("layout.align"),
+	ids: z.array(z.string()),
+	axis: z.enum(["x", "y"]),
+	anchor: z.enum(["start", "center", "end"]),
+	reference: z.string().optional(),
+});
+
+const layoutDistributeCommandSchema = z.object({
+	cmd: z.literal("layout.distribute"),
+	ids: z.array(z.string()),
+	axis: z.enum(["x", "y"]),
+	start: z.number().optional(),
+	end: z.number().optional(),
+	gap: z.number().optional(),
+});
+
+const layoutRelativeCommandSchema = z.object({
+	cmd: z.literal("layout.relative"),
+	id: z.string(),
+	to: z.string(),
+	position: z.enum(["above", "below", "left", "right"]),
+	align: z.enum(["start", "center", "end"]).optional(),
+	gap: z.number().optional(),
+});
+
+const layoutGetBoundsCommandSchema = z.object({
+	cmd: z.literal("layout.getBounds"),
+	id: z.string(),
+});
+
 const sceneExportCommandSchema = z.object({
 	cmd: z.literal("scene.export"),
 });
@@ -259,6 +290,10 @@ export const commandSchema = z.discriminatedUnion("cmd", [
 	screenshotCommandSchema,
 	sceneExportCommandSchema,
 	sceneImportCommandSchema,
+	layoutAlignCommandSchema,
+	layoutDistributeCommandSchema,
+	layoutRelativeCommandSchema,
+	layoutGetBoundsCommandSchema,
 ]);
 
 export type ValidatedCommand = z.infer<typeof commandSchema>;

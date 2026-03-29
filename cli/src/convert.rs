@@ -1,9 +1,13 @@
 use serde_json::Value;
 
 use crate::args::{
-    CameraCommand, CliCommand, ElementCommand, SceneCommand, TextCommand, TimelineCommand,
+    CameraCommand, CliCommand, ElementCommand, LayoutCommand, SceneCommand, TextCommand,
+    TimelineCommand,
 };
-use crate::protocol::{AnimationControls, Command, TweenType, flag_to_option};
+use crate::protocol::{
+    AnimationControls, Command, LayoutAnchor, LayoutAxis, RelativePosition, TweenType,
+    flag_to_option,
+};
 
 fn parse_json(input: &str, label: &str) -> Result<Value, String> {
     serde_json::from_str(input).map_err(|e| format!("Invalid JSON for {label}: {e}"))
@@ -269,6 +273,60 @@ pub fn cli_command_to_protocol(cli_command: CliCommand) -> Result<Command, Strin
             SceneCommand::Import { .. } => {
                 Err("scene import cannot be used inside batch".to_string())
             }
+        },
+
+        CliCommand::Layout(layout_command) => match layout_command {
+            LayoutCommand::Align {
+                ids,
+                axis,
+                anchor,
+                reference,
+            } => {
+                let ids = ids.split(',').map(|s| s.trim().to_string()).collect();
+                let axis = LayoutAxis::parse(&axis)?;
+                let anchor = LayoutAnchor::parse(&anchor)?;
+                Ok(Command::LayoutAlign {
+                    ids,
+                    axis,
+                    anchor,
+                    reference,
+                })
+            }
+            LayoutCommand::Distribute {
+                ids,
+                axis,
+                start,
+                end,
+                gap,
+            } => {
+                let ids = ids.split(',').map(|s| s.trim().to_string()).collect();
+                let axis = LayoutAxis::parse(&axis)?;
+                Ok(Command::LayoutDistribute {
+                    ids,
+                    axis,
+                    start,
+                    end,
+                    gap,
+                })
+            }
+            LayoutCommand::Relative {
+                id,
+                to,
+                position,
+                align,
+                gap,
+            } => {
+                let position = RelativePosition::parse(&position)?;
+                let align = align.map(|a| LayoutAnchor::parse(&a)).transpose()?;
+                Ok(Command::LayoutRelative {
+                    id,
+                    to,
+                    position,
+                    align,
+                    gap,
+                })
+            }
+            LayoutCommand::GetBounds { id } => Ok(Command::LayoutGetBounds { id }),
         },
 
         CliCommand::Screenshot { output } => Ok(Command::Screenshot { output }),

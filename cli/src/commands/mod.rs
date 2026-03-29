@@ -4,6 +4,7 @@ pub mod camera;
 pub mod clear;
 pub mod element;
 pub mod gsap_set;
+pub mod layout;
 pub mod pipe;
 pub mod scene;
 pub mod screenshot;

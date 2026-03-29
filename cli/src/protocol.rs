@@ -8,6 +8,76 @@ pub fn flag_to_option(flag: bool) -> Option<bool> {
     if flag { Some(true) } else { None }
 }
 
+/// Axis for layout alignment and distribution.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum LayoutAxis {
+    #[serde(rename = "x")]
+    X,
+    #[serde(rename = "y")]
+    Y,
+}
+
+impl LayoutAxis {
+    pub fn parse(input: &str) -> Result<Self, String> {
+        match input {
+            "x" => Ok(Self::X),
+            "y" => Ok(Self::Y),
+            other => Err(format!("Unknown axis: {other}. Use x or y")),
+        }
+    }
+}
+
+/// Anchor point for layout alignment.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum LayoutAnchor {
+    #[serde(rename = "start")]
+    Start,
+    #[serde(rename = "center")]
+    Center,
+    #[serde(rename = "end")]
+    End,
+}
+
+impl LayoutAnchor {
+    pub fn parse(input: &str) -> Result<Self, String> {
+        match input {
+            "start" => Ok(Self::Start),
+            "center" => Ok(Self::Center),
+            "end" => Ok(Self::End),
+            other => Err(format!(
+                "Unknown anchor: {other}. Use start, center, or end"
+            )),
+        }
+    }
+}
+
+/// Relative position for layout placement.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum RelativePosition {
+    #[serde(rename = "above")]
+    Above,
+    #[serde(rename = "below")]
+    Below,
+    #[serde(rename = "left")]
+    Left,
+    #[serde(rename = "right")]
+    Right,
+}
+
+impl RelativePosition {
+    pub fn parse(input: &str) -> Result<Self, String> {
+        match input {
+            "above" => Ok(Self::Above),
+            "below" => Ok(Self::Below),
+            "left" => Ok(Self::Left),
+            "right" => Ok(Self::Right),
+            other => Err(format!(
+                "Unknown position: {other}. Use above, below, left, or right"
+            )),
+        }
+    }
+}
+
 /// Tween type — finite set of GSAP animation directions.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TweenType {
@@ -275,6 +345,43 @@ pub enum Command {
 
     Screenshot {
         output: String,
+    },
+
+    #[serde(rename = "layout.align")]
+    LayoutAlign {
+        ids: Vec<String>,
+        axis: LayoutAxis,
+        anchor: LayoutAnchor,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        reference: Option<String>,
+    },
+
+    #[serde(rename = "layout.distribute")]
+    LayoutDistribute {
+        ids: Vec<String>,
+        axis: LayoutAxis,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        start: Option<f64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        end: Option<f64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        gap: Option<f64>,
+    },
+
+    #[serde(rename = "layout.relative")]
+    LayoutRelative {
+        id: String,
+        to: String,
+        position: RelativePosition,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        align: Option<LayoutAnchor>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        gap: Option<f64>,
+    },
+
+    #[serde(rename = "layout.getBounds")]
+    LayoutGetBounds {
+        id: String,
     },
 
     #[serde(rename = "scene.export")]

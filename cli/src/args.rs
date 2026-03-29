@@ -147,6 +147,10 @@ pub enum CliCommand {
     #[command(subcommand)]
     Scene(SceneCommand),
 
+    /// Layout and alignment tools
+    #[command(subcommand)]
+    Layout(LayoutCommand),
+
     /// Send multiple commands in a single batch (JSON array, CLI commands, or file)
     Batch {
         /// Read batch from a file instead of stdin
@@ -381,13 +385,14 @@ pub enum TextCommand {
 #[derive(Subcommand)]
 pub enum CameraCommand {
     /// Set camera position instantly
+    #[command(allow_hyphen_values = true)]
     Set {
         /// Camera X offset
-        #[arg(long)]
+        #[arg(long, allow_hyphen_values = true)]
         x: Option<f64>,
 
         /// Camera Y offset
-        #[arg(long)]
+        #[arg(long, allow_hyphen_values = true)]
         y: Option<f64>,
 
         /// Zoom level (1.0 = default)
@@ -395,18 +400,19 @@ pub enum CameraCommand {
         zoom: Option<f64>,
 
         /// Rotation in degrees
-        #[arg(long)]
+        #[arg(long, allow_hyphen_values = true)]
         rotation: Option<f64>,
     },
 
     /// Animate camera to position
+    #[command(allow_hyphen_values = true)]
     Animate {
         /// Camera X offset
-        #[arg(long)]
+        #[arg(long, allow_hyphen_values = true)]
         x: Option<f64>,
 
         /// Camera Y offset
-        #[arg(long)]
+        #[arg(long, allow_hyphen_values = true)]
         y: Option<f64>,
 
         /// Zoom level (1.0 = default)
@@ -414,7 +420,7 @@ pub enum CameraCommand {
         zoom: Option<f64>,
 
         /// Rotation in degrees
-        #[arg(long)]
+        #[arg(long, allow_hyphen_values = true)]
         rotation: Option<f64>,
 
         /// Duration in seconds
@@ -445,5 +451,77 @@ pub enum SceneCommand {
         /// Input file path
         #[arg(long)]
         input: String,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum LayoutCommand {
+    /// Align elements along an axis
+    Align {
+        /// Comma-separated element IDs
+        ids: String,
+
+        /// Axis to align on (x or y)
+        #[arg(long)]
+        axis: String,
+
+        /// Anchor point: start, center, or end
+        #[arg(long)]
+        anchor: String,
+
+        /// Reference element ID to align to
+        #[arg(long)]
+        reference: Option<String>,
+    },
+
+    /// Distribute elements evenly along an axis
+    Distribute {
+        /// Comma-separated element IDs
+        ids: String,
+
+        /// Axis to distribute on (x or y)
+        #[arg(long)]
+        axis: String,
+
+        /// Start coordinate
+        #[arg(long, allow_hyphen_values = true)]
+        start: Option<f64>,
+
+        /// End coordinate
+        #[arg(long)]
+        end: Option<f64>,
+
+        /// Fixed gap between elements (alternative to start/end)
+        #[arg(long)]
+        gap: Option<f64>,
+    },
+
+    /// Position an element relative to another
+    Relative {
+        /// Element ID to position
+        id: String,
+
+        /// Reference element ID
+        #[arg(long)]
+        to: String,
+
+        /// Position relative to reference: above, below, left, right
+        #[arg(long)]
+        position: String,
+
+        /// Cross-axis alignment: start, center, end (default: center)
+        #[arg(long)]
+        align: Option<String>,
+
+        /// Gap between elements in pixels (default: 0)
+        #[arg(long)]
+        gap: Option<f64>,
+    },
+
+    /// Get the computed bounding box of an element
+    #[command(name = "get-bounds")]
+    GetBounds {
+        /// Element ID
+        id: String,
     },
 }

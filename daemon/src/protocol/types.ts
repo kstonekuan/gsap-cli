@@ -1,3 +1,7 @@
+export type { Anchor, Axis, RelativePosition } from "../layout.js";
+
+import type { Anchor, Axis, RelativePosition } from "../layout.js";
+
 export interface SuccessResponse {
 	ok: true;
 	id?: string;
@@ -23,6 +27,8 @@ export interface SuccessResponse {
 		parent?: string;
 		props: Record<string, unknown>;
 	}>;
+	positions?: Array<{ id: string; x: number; y: number }>;
+	bounds?: { x: number; y: number; width: number; height: number };
 }
 
 export interface ErrorResponse {
@@ -38,6 +44,10 @@ export type CommandType =
 	| "scene.clear"
 	| "scene.export"
 	| "scene.import"
+	| "layout.align"
+	| "layout.distribute"
+	| "layout.relative"
+	| "layout.getBounds"
 	| "element.add"
 	| "element.remove"
 	| "element.set"
@@ -276,6 +286,37 @@ export interface SceneClearCommand extends BaseCommand {
 	cmd: "scene.clear";
 }
 
+export interface LayoutAlignCommand extends BaseCommand {
+	cmd: "layout.align";
+	ids: string[];
+	axis: Axis;
+	anchor: Anchor;
+	reference?: string;
+}
+
+export interface LayoutDistributeCommand extends BaseCommand {
+	cmd: "layout.distribute";
+	ids: string[];
+	axis: Axis;
+	start?: number;
+	end?: number;
+	gap?: number;
+}
+
+export interface LayoutRelativeCommand extends BaseCommand {
+	cmd: "layout.relative";
+	id: string;
+	to: string;
+	position: RelativePosition;
+	align?: Anchor;
+	gap?: number;
+}
+
+export interface LayoutGetBoundsCommand extends BaseCommand {
+	cmd: "layout.getBounds";
+	id: string;
+}
+
 export interface SceneExportCommand extends BaseCommand {
 	cmd: "scene.export";
 }
@@ -325,4 +366,8 @@ export type Command =
 	| CameraAnimateCommand
 	| ScreenshotCommand
 	| SceneExportCommand
-	| SceneImportCommand;
+	| SceneImportCommand
+	| LayoutAlignCommand
+	| LayoutDistributeCommand
+	| LayoutRelativeCommand
+	| LayoutGetBoundsCommand;

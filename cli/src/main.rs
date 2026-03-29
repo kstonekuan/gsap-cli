@@ -5,7 +5,8 @@ mod ipc;
 mod protocol;
 
 use args::{
-    CameraCommand, Cli, CliCommand, ElementCommand, SceneCommand, TextCommand, TimelineCommand,
+    CameraCommand, Cli, CliCommand, ElementCommand, LayoutCommand, SceneCommand, TextCommand,
+    TimelineCommand,
 };
 use clap::Parser;
 
@@ -151,6 +152,29 @@ fn main() {
         CliCommand::Scene(scene_command) => match scene_command {
             SceneCommand::Export { output } => commands::scene::export(output),
             SceneCommand::Import { input } => commands::scene::import(input),
+        },
+        CliCommand::Layout(layout_command) => match layout_command {
+            LayoutCommand::Align {
+                ids,
+                axis,
+                anchor,
+                reference,
+            } => commands::layout::align(ids, axis, anchor, reference),
+            LayoutCommand::Distribute {
+                ids,
+                axis,
+                start,
+                end,
+                gap,
+            } => commands::layout::distribute(ids, axis, start, end, gap),
+            LayoutCommand::Relative {
+                id,
+                to,
+                position,
+                align,
+                gap,
+            } => commands::layout::relative(id, to, position, align, gap),
+            LayoutCommand::GetBounds { id } => commands::layout::get_bounds(id),
         },
         CliCommand::Batch {
             file,

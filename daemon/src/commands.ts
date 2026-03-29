@@ -1,4 +1,10 @@
 import type { AnimationManager } from "./animation-manager.js";
+import {
+	computeAlign,
+	computeDistribute,
+	computeRelative,
+	getBounds,
+} from "./layout.js";
 import { commandSchema, type ValidatedCommand } from "./protocol/schema.js";
 import type { AnimationControlFields, Response } from "./protocol/types.js";
 import type { Renderer } from "./renderers/types.js";
@@ -318,6 +324,76 @@ export async function handleCommand(
 				return { ok: true };
 			}
 
+			case "layout.getBounds": {
+				const element = context.scene.get(command.id);
+				if (!element) {
+					throw new Error(`Element "${command.id}" not found`);
+				}
+				return { ok: true, id: command.id, bounds: getBounds(element) };
+			}
+
+			case "layout.align": {
+				const elements = command.ids.map((id) => {
+					const el = context.scene.get(id);
+					if (!el) throw new Error(`Element "${id}" not found`);
+					return el;
+				});
+				let referenceElement: ReturnType<typeof context.scene.get> | undefined;
+				if (command.reference) {
+					referenceElement = context.scene.get(command.reference);
+					if (!referenceElement) {
+						throw new Error(
+							`Reference element "${command.reference}" not found`,
+						);
+					}
+				}
+				const positions = computeAlign(
+					elements,
+					command.axis,
+					command.anchor,
+					referenceElement,
+				);
+				applyPositions(positions, context);
+				return { ok: true, positions };
+			}
+
+			case "layout.distribute": {
+				const elements = command.ids.map((id) => {
+					const el = context.scene.get(id);
+					if (!el) throw new Error(`Element "${id}" not found`);
+					return el;
+				});
+				const positions = computeDistribute(
+					elements,
+					command.axis,
+					command.start,
+					command.end,
+					command.gap,
+				);
+				applyPositions(positions, context);
+				return { ok: true, positions };
+			}
+
+			case "layout.relative": {
+				const element = context.scene.get(command.id);
+				if (!element) {
+					throw new Error(`Element "${command.id}" not found`);
+				}
+				const reference = context.scene.get(command.to);
+				if (!reference) {
+					throw new Error(`Reference element "${command.to}" not found`);
+				}
+				const position = computeRelative(
+					element,
+					reference,
+					command.position,
+					command.align ?? "center",
+					command.gap ?? 0,
+				);
+				applyPositions([position], context);
+				return { ok: true, positions: [position] };
+			}
+
 			case "scene.export": {
 				return {
 					ok: true,
@@ -362,4 +438,52 @@ export async function handleCommand(
 			error: error instanceof Error ? error.message : String(error),
 		};
 	}
+}
+
+/** Apply computed positions to the scene and forward updates to the renderer. */
+function applyPositions(
+	positions: Array<{ id: string; x: number; y: number }>,
+	context: CommandContext,
+): void {
+	for (const pos of positions) {
+		const element = context.scene.get(pos.id);
+		if (!element) continue;
+
+		if (element.type === "line") {
+			// For lines, compute the delta from old bounding box to new position
+			const oldX1 =
+				typeof element.props["x1"] === "number" ? element.props["x1"] : 0;
+			const oldY1 =
+				typeof element.props["y1"] === "number" ? element.props["y1"] : 0;
+			const oldX2 =
+				typeof element.props["x2"] === "number" ? element.props["x2"] : 0;
+			const oldY2 =
+				typeof element.props["y2"] === "number" ? element.props["y2"] : 0;
+			const oldMinX = Math.min(oldX1, oldX2);
+			const oldMinY = Math.min(oldY1, oldY2);
+			const deltaX = pos.x - oldMinX;
+			const deltaY = pos.y - oldMinY;
+			const lineProps = {
+				x1: oldX1 + deltaX,
+				y1: oldY1 + deltaY,
+				x2: oldX2 + deltaX,
+				y2: oldY2 + deltaY,
+			};
+			context.scene.set(pos.id, lineProps);
+			context.renderer.forwardCommand({
+				cmd: "element.set",
+				id: pos.id,
+				props: lineProps,
+			});
+		} else {
+			const props = { x: pos.x, y: pos.y };
+			context.scene.set(pos.id, props);
+			context.renderer.forwardCommand({
+				cmd: "element.set",
+				id: pos.id,
+				props,
+			});
+		}
+	}
+	context.renderer.onSceneChange(context.scene);
 }
